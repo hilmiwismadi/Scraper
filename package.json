@@ -1,0 +1,26 @@
+{
+  "name": "instagram-scraper-local",
+  "version": "1.0.0",
+  "description": "Local Instagram scraper that uploads to CRM VPS",
+  "type": "module",
+  "main": "scraper.js",
+  "scripts": {
+    "start": "node server.js",
+    "scraper": "node scraper.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "instagram",
+    "scraper",
+    "selenium"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.22.1",
+    "ollama": "^0.5.11",
+    "selenium-webdriver": "^4.16.0"
+  }
+}

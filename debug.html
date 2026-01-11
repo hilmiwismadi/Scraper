@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instagram Scraper - Debug Mode</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      color: #58a6ff;
+    }
+
+    .header-links {
+      display: flex;
+      gap: 15px;
+    }
+
+    .header-links a {
+      color: #8b949e;
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .header-links a:hover {
+      color: #58a6ff;
+    }
+
+    .container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .sidebar {
+      width: 350px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-section {
+      padding: 15px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .sidebar-section h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #8b949e;
+      margin-bottom: 5px;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 8px 12px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      font-size: 13px;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #58a6ff;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #238636;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #2ea043;
+    }
+
+    .btn-danger {
+      background: #da3633;
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      background: #f85149;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      background: #0d1117;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #30363d;
+    }
+
+    .status-dot.active {
+      background: #238636;
+      animation: pulse 1.5s infinite;
+    }
+
+    .status-dot.error {
+      background: #da3633;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .logs {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .log-line {
+      margin-bottom: 4px;
+      word-wrap: break-word;
+    }
+
+    .log-line.success { color: #3fb950; }
+    .log-line.error { color: #f85149; }
+    .log-line.warning { color: #d29922; }
+    .log-line.info { color: #58a6ff; }
+    .log-line.header { color: #8b949e; font-weight: 600; margin-top: 10px; }
+    .log-line.progress { color: #a5d6ff; }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .browser-view {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: #0d1117;
+    }
+
+    .browser-container {
+      max-width: 100%;
+      max-height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .browser-header {
+      background: #161b22;
+      padding: 8px 15px;
+      border-radius: 8px 8px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+    }
+
+    .browser-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .browser-dot.red { background: #ff5f57; }
+    .browser-dot.yellow { background: #febc2e; }
+    .browser-dot.green { background: #28c840; }
+
+    .browser-url {
+      color: #8b949e;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+
+    .screenshot-container {
+      background: #161b22;
+      border-radius: 0 0 8px 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .screenshot {
+      max-width: 100%;
+      max-height: calc(100vh - 200px);
+      display: block;
+    }
+
+    .screenshot-placeholder {
+      width: 960px;
+      height: 540px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #21262d;
+      color: #484f58;
+      font-size: 14px;
+    }
+
+    .captions-panel {
+      height: 200px;
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      overflow-y: auto;
+      padding: 15px;
+    }
+
+    .captions-panel h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+
+    .caption-content {
+      background: #0d1117;
+      padding: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .caption-empty {
+      color: #484f58;
+      font-style: italic;
+    }
+
+    .extracted-data {
+      background: #0d1117;
+      padding: 12px;
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+
+    .extracted-data h4 {
+      font-size: 11px;
+      color: #8b949e;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .data-row {
+      display: flex;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .data-label {
+      color: #8b949e;
+      width: 100px;
+      flex-shrink: 0;
+    }
+
+    .data-value {
+      color: #58a6ff;
+    }
+
+    .data-value.phone {
+      color: #3fb950;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #30363d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🐛 Debug Mode - Instagram Scraper</h1>
+    <div class="header-links">
+      <a href="index.html">Normal Mode</a>
+      <a href="results.html">View Results</a>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <h3>Configuration</h3>
+        <div class="input-group">
+          <label>Instagram URL (Post or Profile) *</label>
+          <input type="text" id="postLink" placeholder="https://www.instagram.com/p/... or /username/">
+        </div>
+        <div class="row" style="gap: 10px;">
+          <div class="input-group">
+            <label>Start Index</label>
+            <input type="number" id="startIndex" value="0" min="0">
+          </div>
+          <div class="input-group">
+            <label>End Index</label>
+            <input type="number" id="endIndex" value="1" min="1">
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Instagram Username *</label>
+          <input type="text" id="instaUsername" value="hilmekkkk">
+        </div>
+        <div class="input-group">
+          <label>Instagram Password *</label>
+          <input type="password" id="instaPassword" value="wismadi4z11">
+        </div>
+        <button class="btn btn-primary" id="startBtn">Start Debug Session</button>
+        <button class="btn btn-danger" id="stopBtn" style="display: none; margin-top: 10px;">Stop Session</button>
+      </div>
+
+      <div class="sidebar-section">
+        <h3>Status</h3>
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Idle</span>
+        </div>
+      </div>
+
+      <div class="logs" id="logs">
+        <div class="log-line header">=== Debug Session ===</div>
+        <div class="log-line info">Enter a post link and click "Start Debug Session"</div>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <div class="browser-view">
+        <div class="browser-container">
+          <div class="browser-header">
+            <div class="browser-dot red"></div>
+            <div class="browser-dot yellow"></div>
+            <div class="browser-dot green"></div>
+            <span class="browser-url" id="browserUrl">instagram.com</span>
+          </div>
+          <div class="screenshot-container">
+            <div class="screenshot-placeholder" id="screenshotPlaceholder">
+              Waiting for browser window to open...
+            </div>
+            <img class="screenshot" id="screenshot" style="display: none;" alt="Browser View">
+          </div>
+        </div>
+      </div>
+
+      <div class="captions-panel">
+        <h3>Extracted Caption & Data</h3>
+        <div class="caption-content" id="captionContent">
+          <span class="caption-empty">Caption will appear here when scraping begins...</span>
+        </div>
+        <div class="extracted-data" id="extractedData" style="display: none;">
+          <h4>Extracted Information</h4>
+          <div class="data-row">
+            <span class="data-label">Event Title:</span>
+            <span class="data-value" id="eventTitle">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Organizer:</span>
+            <span class="data-value" id="organizer">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Phone 1:</span>
+            <span class="data-value phone" id="phone1">-</span>
+          </div>
+          <div class="data-row">
+            <span class="data-label">Phone 2:</span>
+            <span class="data-value phone" id="phone2">-</span>
+          </div>
+          <div id="resultsActions" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #30363d;">
+            <button class="btn btn-primary" onclick="downloadResults('json')" style="margin-bottom: 8px;">📥 Download JSON</button>
+            <button class="btn btn-primary" onclick="downloadResults('txt')" style="margin-bottom: 8px;">📄 Download Text</button>
+            <button class="btn btn-primary" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const logs = document.getElementById('logs');
+    const screenshot = document.getElementById('screenshot');
+    const screenshotPlaceholder = document.getElementById('screenshotPlaceholder');
+    const browserUrl = document.getElementById('browserUrl');
+    const captionContent = document.getElementById('captionContent');
+    const extractedData = document.getElementById('extractedData');
+    const resultsActions = document.getElementById('resultsActions');
+
+    let currentSessionId = null;
+    let eventSource = null;
+    let allScrapedData = []; // Store all scraped posts for multiple post scraping
+
+    function updateStatus(active, text) {
+      statusDot.className = 'status-dot' + (active ? ' active' : '');
+      statusText.textContent = text;
+    }
+
+    function addLog(message, type = 'info') {
+      const line = document.createElement('div');
+      line.className = 'log-line ' + type;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logs.appendChild(line);
+      logs.scrollTop = logs.scrollHeight;
+    }
+
+    function updateScreenshot(base64Data) {
+      screenshot.src = 'data:image/png;base64,' + base64Data;
+      screenshot.style.display = 'block';
+      screenshotPlaceholder.style.display = 'none';
+    }
+
+    function updateCaption(caption) {
+      if (caption && caption.length > 0) {
+        captionContent.innerHTML = caption.substring(0, 2000) + (caption.length > 2000 ? '...' : '');
+      } else {
+        captionContent.innerHTML = '<span class="caption-empty">No caption extracted</span>';
+      }
+    }
+
+    function updateExtractedData(data) {
+      if (data) {
+        extractedData.style.display = 'block';
+        document.getElementById('eventTitle').textContent = data.eventTitle || '-';
+        document.getElementById('organizer').textContent = data.eventOrganizer || '-';
+        document.getElementById('phone1').textContent = data.phoneNumber1 || '-';
+        document.getElementById('phone2').textContent = data.phoneNumber2 || '-';
+      }
+    }
+
+    function showResultsPanel(data) {
+      if (data) {
+        resultsActions.style.display = 'block';
+      }
+    }
+
+    function downloadResults(format) {
+      if (!window.scrapedData || window.scrapedData.length === 0) {
+        addLog('No data to download', 'error');
+        return;
+      }
+
+      const allData = window.scrapedData;
+      let content, filename, type;
+
+      if (format === 'json') {
+        // Download all posts as JSON array
+        content = JSON.stringify({
+          totalPosts: allData.length,
+          postsWithPhone: allData.filter(p => p.allPhones && p.allPhones.length > 0).length,
+          posts: allData.map(data => ({
+            postUrl: data.postUrl,
+            postIndex: data.postIndex,
+            caption: data.caption,
+            phoneNumber1: data.phoneNumber1,
+            phoneNumber2: data.phoneNumber2,
+            phoneNumber3: data.phoneNumber3,
+            phoneNumber4: data.phoneNumber4,
+            allPhones: data.allPhones,
+            eventTitle: data.eventTitle,
+            eventOrganizer: data.eventOrganizer,
+            postDate: data.postDate,
+            imageUrl: data.imageUrl
+          }))
+        }, null, 2);
+        filename = `instagram_scrape_${Date.now()}.json`;
+        type = 'application/json';
+      } else {
+        // Download as readable text
+        let text = `INSTAGRAM SCRAPING RESULTS\n`;
+        text += `========================\n`;
+        text += `Total Posts: ${allData.length}\n`;
+        text += `Posts with Phone: ${allData.filter(p => p.allPhones && p.allPhones.length > 0).length}\n\n`;
+
+        allData.forEach((data, index) => {
+          text += `POST ${index + 1} (Index ${data.postIndex})\n`;
+          text += `----------------------------\n`;
+          text += `URL: ${data.postUrl}\n`;
+          text += `Phone Numbers:\n`;
+          if (data.phoneNumber1) text += `  - ${data.phoneNumber1}\n`;
+          if (data.phoneNumber2) text += `  - ${data.phoneNumber2}\n`;
+          if (data.phoneNumber3) text += `  - ${data.phoneNumber3}\n`;
+          if (data.phoneNumber4) text += `  - ${data.phoneNumber4}\n`;
+          text += `Event Title: ${data.eventTitle || 'N/A'}\n`;
+          text += `Organizer: ${data.eventOrganizer || 'N/A'}\n`;
+          text += `Caption:\n${data.caption?.substring(0, 200)}${data.caption?.length > 200 ? '...' : ''}\n\n`;
+        });
+
+        content = text;
+        filename = `instagram_scrape_${Date.now()}.txt`;
+        type = 'text/plain';
+      }
+
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      addLog(`Downloaded ${allData.length} posts as ${format.toUpperCase()}`, 'success');
+    }
+
+    function copyToClipboard() {
+      if (!window.scrapedData || window.scrapedData.length === 0) {
+        addLog('No data to copy', 'error');
+        return;
+      }
+
+      const allData = window.scrapedData;
+      let text = `INSTAGRAM SCRAPING RESULTS (${allData.length} posts)\n\n`;
+
+      allData.forEach((data, index) => {
+        text += `Post ${index + 1}: ${data.postUrl}\n`;
+        text += `Phones: ${data.allPhones?.join(', ') || 'None'}\n`;
+        text += `Event: ${data.eventTitle || 'N/A'}\n\n`;
+      });
+
+      navigator.clipboard.writeText(text).then(() => {
+        addLog('Copied summary to clipboard!', 'success');
+      }).catch(() => {
+        addLog('Failed to copy to clipboard', 'error');
+      });
+    }
+
+    startBtn.addEventListener('click', async () => {
+      const postLink = document.getElementById('postLink').value.trim();
+      const startIndex = document.getElementById('startIndex').value;
+      const endIndex = document.getElementById('endIndex').value;
+      const instaUsername = document.getElementById('instaUsername').value.trim();
+      const instaPassword = document.getElementById('instaPassword').value.trim();
+
+      if (!postLink || !postLink.includes('instagram.com/')) {
+        addLog('Please enter a valid Instagram URL (post or profile)', 'error');
+        return;
+      }
+
+      if (!instaUsername || !instaPassword) {
+        addLog('Instagram credentials are required', 'error');
+        return;
+      }
+
+      // Reset UI
+      logs.innerHTML = '<div class="log-line header">=== Debug Session Started ===</div>';
+      screenshot.style.display = 'none';
+      screenshotPlaceholder.style.display = 'flex';
+      extractedData.style.display = 'none';
+      resultsActions.style.display = 'none';
+      captionContent.innerHTML = '<span class="caption-empty">Caption will appear here when scraping begins...</span>';
+      allScrapedData = []; // Reset scraped data
+      window.scrapedData = [];
+
+      startBtn.disabled = true;
+      startBtn.textContent = 'Starting...';
+      updateStatus(true, 'Initializing...');
+
+      try {
+        const response = await fetch('/api/debug/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ postLink, startIndex, endIndex, instaUsername, instaPassword })
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.sessionId) {
+          currentSessionId = result.sessionId;
+          addLog('Debug session started: ' + currentSessionId, 'success');
+          addLog(`Scraping posts ${startIndex} to ${endIndex}...`, 'info');
+          updateStatus(true, 'Running');
+
+          startBtn.style.display = 'none';
+          stopBtn.style.display = 'block';
+
+          // Connect to SSE stream
+          eventSource = new EventSource(`/api/scrape/stream?sessionId=${currentSessionId}`);
+
+          eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'log') {
+              addLog(data.message, data.logType);
+
+              // Update URL display based on log messages
+              if (data.message.includes('instagram.com')) {
+                const urlMatch = data.message.match(/https?:\/\/[^\s]+instagram\.com[^\s]*/);
+                if (urlMatch) {
+                  browserUrl.textContent = urlMatch[0].replace('https://', '').replace('http://', '');
+                }
+              }
+            } else if (data.type === 'screenshot') {
+              updateScreenshot(data.data);
+            } else if (data.type === 'caption') {
+              updateCaption(data.data.caption);
+              // Store post URL for results
+              window.currentPostUrl = data.data.postUrl;
+            } else if (data.type === 'data') {
+              // Accumulate all scraped posts
+              allScrapedData.push(data.data);
+              window.scrapedData = allScrapedData;
+              updateExtractedData(data.data);
+              showResultsPanel(data.data);
+              addLog(`Post ${data.data.postIndex + 1} scraped (${allScrapedData.length} total)`, 'success');
+            } else if (data.type === 'complete') {
+              eventSource.close();
+              updateStatus(false, data.success ? 'Completed' : 'Failed');
+              addLog(`Session ${data.success ? 'completed' : 'failed'} - Total posts scraped: ${allScrapedData.length}`, data.success ? 'success' : 'error');
+              startBtn.disabled = false;
+              startBtn.style.display = 'block';
+              startBtn.textContent = 'Start Debug Session';
+              stopBtn.style.display = 'none';
+            } else if (data.type === 'error') {
+              addLog('Error: ' + data.message, 'error');
+              updateStatus(false, 'Error');
+              startBtn.disabled = false;
+              startBtn.style.display = 'block';
+              startBtn.textContent = 'Start Debug Session';
+              stopBtn.style.display = 'none';
+            }
+          };
+
+          eventSource.onerror = () => {
+            eventSource.close();
+            updateStatus(false, 'Disconnected');
+            startBtn.disabled = false;
+            startBtn.style.display = 'block';
+            startBtn.textContent = 'Start Debug Session';
+            stopBtn.style.display = 'none';
+          };
+
+        } else {
+          addLog('Failed to start: ' + (result.error || 'Unknown error'), 'error');
+          updateStatus(false, 'Failed');
+          startBtn.disabled = false;
+          startBtn.textContent = 'Start Debug Session';
+        }
+      } catch (error) {
+        addLog('Error: ' + error.message, 'error');
+        updateStatus(false, 'Error');
+        startBtn.disabled = false;
+        startBtn.textContent = 'Start Debug Session';
+      }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      if (currentSessionId) {
+        try {
+          await fetch('/api/debug/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: currentSessionId })
+          });
+          addLog('Session stopped', 'warning');
+        } catch (error) {
+          addLog('Error stopping session: ' + error.message, 'error');
+        }
+
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        updateStatus(false, 'Stopped');
+        startBtn.disabled = false;
+        startBtn.style.display = 'block';
+        startBtn.textContent = 'Start Debug Session';
+        stopBtn.style.display = 'none';
+        currentSessionId = null;
+      }
+    });
+  </script>
+</body>
+</html>

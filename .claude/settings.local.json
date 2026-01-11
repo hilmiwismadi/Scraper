@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm start)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(where:*)",
+      "Bash(ollama list:*)",
+      "Bash(ollama pull:*)",
+      "Bash(setx:*)",
+      "Bash(set:*)",
+      "Bash(if not exist \"D:\\\\OllamaModels\" mkdir \"D:\\\\OllamaModels\")",
+      "Bash(npm install:*)",
+      "Bash(git add:*)",
+      "Bash(if exist nul del nul)",
+      "Bash(git commit:*)"
+    ]
+  }
+}

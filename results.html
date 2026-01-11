@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scraping Results - Instagram Scraper</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .header .subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .header .actions {
+      margin-top: 20px;
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+      margin-top: 5px;
+    }
+
+    .table-container {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    th {
+      text-align: left;
+      padding: 15px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-failed {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .status-pending {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .phone-badge {
+      background: #ff9800;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .no-phone-badge {
+      background: #e0e0e0;
+      color: #666;
+      padding: 4px 10px;
+      border-radius: 15px;
+      font-size: 11px;
+    }
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .empty-state svg {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      max-width: 900px;
+      width: 90%;
+      max-height: 80vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 20px 30px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 20px;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+
+    .modal-body {
+      padding: 30px;
+      overflow-y: auto;
+    }
+
+    .session-info {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .session-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .session-info-label {
+      font-weight: 600;
+      color: #666;
+    }
+
+    .session-info-value {
+      color: #333;
+    }
+
+    .posts-table {
+      width: 100%;
+    }
+
+    .posts-table th,
+    .posts-table td {
+      padding: 12px;
+      font-size: 13px;
+    }
+
+    .phone-cell {
+      font-family: 'Courier New', monospace;
+      background: #fff3e0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .post-link {
+      color: #667eea;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>📊 Scraping Results</h1>
+      <p class="subtitle">View all your Instagram scraping sessions and results</p>
+      <div class="actions">
+        <a href="index.html" class="btn btn-primary">← Back to Scraper</a>
+        <button class="btn btn-secondary" onclick="loadResults()">🔄 Refresh</button>
+        <button class="btn btn-secondary" onclick="exportAllData()">💾 Export All (CSV)</button>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Total Sessions</div>
+        <div class="value" id="totalSessions">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Posts Scraped</div>
+        <div class="value" id="totalPosts">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Phones Found</div>
+        <div class="value" id="totalPhones">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Success Rate</div>
+        <div class="value" id="successRate">0%</div>
+      </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Instagram Profile</th>
+            <th>Range</th>
+            <th>Status</th>
+            <th>Posts Scraped</th>
+            <th>Phones</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sessionsTableBody">
+          <!-- Sessions will be loaded here -->
+        </tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <h3>No scraping sessions found</h3>
+        <p>Start a scraper to see results here</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Modal -->
+  <div class="modal" id="detailModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modalTitle">Session Details</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="modalBody">
+        <!-- Session details will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Caption Modal -->
+  <div class="modal" id="captionModal">
+    <div class="modal-content" style="max-width: 700px;">
+      <div class="modal-header">
+        <h2 id="captionModalTitle">Full Caption</h2>
+        <button class="modal-close" onclick="closeCaptionModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="captionModalBody" style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">
+        <!-- Caption will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allSessions = [];
+    let currentSessionPosts = [];
+
+    // Load results on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadResults();
+    });
+
+    async function loadResults() {
+      try {
+        const response = await fetch('/api/results');
+        const data = await response.json();
+
+        if (data.results && data.results.length > 0) {
+          allSessions = data.results;
+          renderSessions(data.results);
+          updateStats(data.results);
+        } else {
+          showEmptyState();
+        }
+      } catch (error) {
+        console.error('Failed to load results:', error);
+        document.getElementById('sessionsTableBody').innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: #c62828;">
+              Failed to load results: ${error.message}
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderSessions(sessions) {
+      const tbody = document.getElementById('sessionsTableBody');
+      tbody.innerHTML = '';
+
+      sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      sessions.forEach(session => {
+        const tr = document.createElement('tr');
+        const date = new Date(session.timestamp);
+        const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        const hasPhone = (session.summary?.withPhone || 0) > 0;
+
+        tr.innerHTML = `
+          <td>
+            <div>${formattedDate}</div>
+            <div style="font-size: 11px; color: #999;">${session.sessionId || 'N/A'}</div>
+          </td>
+          <td>
+            <a href="${session.profileUrl}" target="_blank">${session.username || 'Unknown'}</a>
+          </td>
+          <td>${session.summary?.range?.start || 0} - ${session.summary?.range?.end || 0}</td>
+          <td><span class="status-badge status-completed">Completed</span></td>
+          <td>${session.summary?.total || 0} posts</td>
+          <td>
+            ${hasPhone
+              ? `<span class="phone-badge">${session.summary.withPhone} phones</span>`
+              : `<span class="no-phone-badge">None</span>`
+            }
+          </td>
+          <td>
+            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="viewSession('${session.file}')">
+              View Details
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('emptyState').style.display = 'none';
+    }
+
+    function updateStats(sessions) {
+      const totalSessions = sessions.length;
+      const totalPosts = sessions.reduce((sum, s) => sum + (s.summary?.total || 0), 0);
+      const totalPhones = sessions.reduce((sum, s) => sum + (s.summary?.withPhone || 0), 0);
+
+      document.getElementById('totalSessions').textContent = totalSessions;
+      document.getElementById('totalPosts').textContent = totalPosts;
+      document.getElementById('totalPhones').textContent = totalPhones;
+
+      const successRate = totalSessions > 0
+        ? Math.round((sessions.filter(s => s.summary?.total > 0).length / totalSessions) * 100)
+        : 0;
+      document.getElementById('successRate').textContent = successRate + '%';
+    }
+
+    function showEmptyState() {
+      document.getElementById('sessionsTableBody').innerHTML = '';
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('totalSessions').textContent = '0';
+      document.getElementById('totalPosts').textContent = '0';
+      document.getElementById('totalPhones').textContent = '0';
+      document.getElementById('successRate').textContent = '0%';
+    }
+
+    async function viewSession(filename) {
+      const session = allSessions.find(s => s.file === filename);
+      if (!session) return;
+
+      // Store current session posts for caption lookup
+      currentSessionPosts = session.posts || [];
+
+      document.getElementById('modalTitle').textContent = `Scraping Session - ${session.username}`;
+      const modalBody = document.getElementById('modalBody');
+
+      const date = new Date(session.timestamp);
+      const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+
+      modalBody.innerHTML = `
+        <div class="session-info">
+          <div class="session-info-row">
+            <span class="session-info-label">Profile:</span>
+            <span class="session-info-value"><a href="${session.profileUrl}" target="_blank">${session.profileUrl}</a></span>
+          </div>
+          <div class="session-info-row">
+            <span class="session-info-label">Scraped At:</span>
+            <span class="session-info-value">${formattedDate}</span>
+          </div>
+          <div class="session-info-row">
+            <span class="session-info-label">Range:</span>
+            <span class="session-info-value">Posts ${session.summary?.range?.start || 0} - ${session.summary?.range?.end || 0}</span>
+          </div>
+          <div class="session-info-row">
+            <span class="session-info-label">Results:</span>
+            <span class="session-info-value">${session.summary?.total || 0} posts scraped, ${session.summary?.withPhone || 0} with phones</span>
+          </div>
+        </div>
+
+        <h3>Scraped Posts (${session.posts?.length || 0})</h3>
+        ${session.posts && session.posts.length > 0 ? `
+          <table class="posts-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Event Title</th>
+                <th>Organizer</th>
+                <th>Phone Numbers</th>
+                <th>Caption</th>
+                <th>Date</th>
+                <th>Link</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${session.posts.map(post => {
+                // Get all phone numbers
+                const phones = [];
+                if (post.phoneNumber1) phones.push(post.phoneNumber1);
+                if (post.phoneNumber2) phones.push(post.phoneNumber2);
+                if (post.phoneNumber3) phones.push(post.phoneNumber3);
+                if (post.phoneNumber4) phones.push(post.phoneNumber4);
+                if (post.allPhones && post.allPhones.length > 0) {
+                  post.allPhones.forEach(p => { if (!phones.includes(p)) phones.push(p); });
+                }
+
+                // Truncate caption for display
+                const captionPreview = post.caption
+                  ? (post.caption.length > 100 ? post.caption.substring(0, 100) + '...' : post.caption)
+                  : 'N/A';
+
+                return `
+                  <tr>
+                    <td>${post.postIndex + 1}</td>
+                    <td>${post.eventTitle || 'N/A'}</td>
+                    <td>${post.eventOrganizer || 'N/A'}</td>
+                    <td>
+                      ${phones.length > 0
+                        ? phones.map(p => `<span class="phone-cell">${p}</span>`).join(' ')
+                        : '<span style="color: #999;">None</span>'
+                      }
+                    </td>
+                    <td>
+                      <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;" onclick="showCaption('${post.postIndex}')">
+                        ${captionPreview}
+                      </button>
+                    </td>
+                    <td>${post.postDate ? new Date(post.postDate).toLocaleDateString() : 'N/A'}</td>
+                    <td><a href="${post.postUrl}" target="_blank" class="post-link">View →</a></td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : '<p style="color: #666; margin-top: 20px;">No posts found in this session.</p>'}
+      `;
+
+      document.getElementById('detailModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('detailModal').classList.remove('active');
+    }
+
+    function showCaption(postIndex) {
+      const post = currentSessionPosts.find(p => p.postIndex == postIndex);
+      if (!post) return;
+
+      document.getElementById('captionModalTitle').textContent = `Caption - Post ${post.postIndex + 1}`;
+      document.getElementById('captionModalBody').textContent = post.caption || 'No caption available';
+      document.getElementById('captionModal').classList.add('active');
+    }
+
+    function closeCaptionModal() {
+      document.getElementById('captionModal').classList.remove('active');
+    }
+
+    // Close modal on outside click
+    document.getElementById('detailModal').addEventListener('click', (e) => {
+      if (e.target.id === 'detailModal') {
+        closeModal();
+      }
+    });
+
+    document.getElementById('captionModal').addEventListener('click', (e) => {
+      if (e.target.id === 'captionModal') {
+        closeCaptionModal();
+      }
+    });
+
+    function exportAllData() {
+      if (allSessions.length === 0) {
+        alert('No data to export');
+        return;
+      }
+
+      // CSV header with all phone columns
+      let csv = 'Session,Profile,Post Index,Event Title,Organizer,Phone 1,Phone 2,Phone 3,Phone 4,All Phones,Post Date,Post URL,Caption\n';
+
+      allSessions.forEach(session => {
+        if (session.posts) {
+          session.posts.forEach(post => {
+            // Get all phone numbers
+            const phones = [];
+            if (post.phoneNumber1) phones.push(post.phoneNumber1);
+            if (post.phoneNumber2) phones.push(post.phoneNumber2);
+            if (post.phoneNumber3) phones.push(post.phoneNumber3);
+            if (post.phoneNumber4) phones.push(post.phoneNumber4);
+            if (post.allPhones && post.allPhones.length > 0) {
+              post.allPhones.forEach(p => { if (!phones.includes(p)) phones.push(p); });
+            }
+
+            csv += [
+              session.sessionId || session.file,
+              session.username || session.profileUrl,
+              post.postIndex,
+              (post.eventTitle || '').replace(/,/g, ';').replace(/\n/g, ' '),
+              (post.eventOrganizer || '').replace(/,/g, ';').replace(/\n/g, ' '),
+              post.phoneNumber1 || '',
+              post.phoneNumber2 || '',
+              post.phoneNumber3 || '',
+              post.phoneNumber4 || '',
+              phones.join('; '),
+              post.postDate ? new Date(post.postDate).toLocaleDateString() : '',
+              post.postUrl,
+              (post.caption || '').replace(/,/g, ';').replace(/\n/g, ' ')
+            ].join(',') + '\n';
+          });
+        }
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `instagram_scraper_export_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
