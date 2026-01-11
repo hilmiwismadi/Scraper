@@ -5,6 +5,10 @@ import apiClient from './apiClient.js';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -268,6 +272,65 @@ function parsePostDate(dateStr) {
   if (!dateStr) return null;
   const date = new Date(dateStr);
   return isNaN(date.getTime()) ? null : date;
+}
+
+// Create CSV file from scraped data for Claude parsing
+function createCsvForParsing(sessionId, jsonData) {
+  const parsedDir = path.join(__dirname, 'parsed');
+
+  // Get increment number for this session (count existing CSV files for this session)
+  const existingFiles = fs.readdirSync(parsedDir)
+    .filter(f => f.startsWith(`parsed-${sessionId}-`) && f.endsWith('.csv'))
+    .length;
+  const increment = existingFiles + 1;
+
+  const csvFilename = `parsed#${increment}-${sessionId}-${Date.now()}.csv`;
+  const csvPath = path.join(parsedDir, csvFilename);
+
+  // Ensure parsed directory exists
+  if (!fs.existsSync(parsedDir)) {
+    fs.mkdirSync(parsedDir, { recursive: true });
+  }
+
+  const csvHeaders = 'session_id,json_file,post_index,post_url,original_caption,extracted_title,extracted_organizer,extracted_date,extracted_location,registration_fee,phone_numbers,contact_persons,parse_status,parse_timestamp,last_edited\n';
+
+  let csvContent = csvHeaders;
+
+  for (const post of jsonData.posts || []) {
+    const row = [
+      sessionId,
+      `scraped-${sessionId}-${jsonData.timestamp || Date.now()}.json`,
+      post.postIndex,
+      post.postUrl,
+      `"${(post.caption || '').replace(/"/g, '""')}"`,
+      '', // extracted_title - to be filled by Claude
+      '', // extracted_organizer - to be filled by Claude
+      post.postDate || '',
+      '', // extracted_location - to be filled by Claude
+      '', // registration_fee - to be filled by Claude
+      (post.allPhones || []).join(';'),
+      '', // contact_persons - to be filled by Claude
+      'pending',
+      '',
+      ''
+    ].join(',');
+    csvContent += row + '\n';
+  }
+
+  fs.writeFileSync(csvPath, csvContent, 'utf8');
+
+  // Update sessions index
+  const indexPath = path.join(parsedDir, 'sessions-index.csv');
+  const jsonFilename = `scraped-${sessionId}-${jsonData.timestamp || Date.now()}.json`;
+  const indexEntry = `${sessionId},${csvFilename},${jsonData.username || ''},${jsonData.profileUrl || ''},${jsonData.timestamp || ''},${jsonData.posts?.length || 0},pending,,,0,\n`;
+
+  // Append to sessions index (create if not exists)
+  if (!fs.existsSync(indexPath)) {
+    fs.writeFileSync(indexPath, 'session_id,json_file,username,profile_url,scrape_timestamp,total_posts,parse_status,parse_timestamp,vps_sent,vps_sent_timestamp\n', 'utf8');
+  }
+  fs.appendFileSync(indexPath, indexEntry, 'utf8');
+
+  return csvPath;
 }
 
 // Progress indicator
@@ -631,17 +694,54 @@ async function scrapeInstagram(options) {
       const scrollIterations = Math.ceil(postsNeeded / postsPerScroll) + 2; // +2 for buffer
       console.log('→ Will scroll', scrollIterations, 'times to load at least', postsNeeded, 'posts');
 
+      // Scroll with detection of when no more posts are loading
+      let previousPostCount = 0;
+      let noNewPostsCount = 0;
+      const maxNoNewPosts = 5; // Stop after 5 consecutive scrolls with no new posts
+      let actualScrolls = 0;
+
+      console.log('→ Will scroll up to', scrollIterations, 'times (or until no new posts load)');
+
       for (let i = 0; i < scrollIterations; i++) {
         await driver.executeScript('window.scrollTo(0, document.body.scrollHeight)');
         await driver.sleep(2000);
 
-        if ((i + 1) % 5 === 0 || i === scrollIterations - 1) {
-          showProgress(i + 1, scrollIterations, `Scrolling... (${i + 1}/${scrollIterations})`);
-          console.log('  Scrolled', i + 1, 'times...');
+        // Check current post count
+        const currentPostElements = await driver.findElements(By.css('a[href*="/p/"]'));
+        const currentPostCount = currentPostElements.length;
+
+        if ((i + 1) % 5 === 0 || i === 0) {
+          showProgress(i + 1, scrollIterations, `Scrolling... (${i + 1}/${scrollIterations}, ${currentPostCount} posts)`);
+          console.log(`  Scrolled ${i + 1} times... Found ${currentPostCount} posts so far`);
+        }
+
+        // Detect if no new posts are loading
+        if (currentPostCount === previousPostCount) {
+          noNewPostsCount++;
+          console.log(`  No new posts detected (${noNewPostsCount}/${maxNoNewPosts})`);
+
+          if (noNewPostsCount >= maxNoNewPosts) {
+            console.log(`✓ No more posts loading after ${actualScrolls + 1} scrolls`);
+            console.log(`✓ Total posts found: ${currentPostCount}`);
+            break;
+          }
+        } else {
+          noNewPostsCount = 0; // Reset counter when new posts are found
+          console.log(`  ✓ Found ${currentPostCount - previousPostCount} new posts!`);
+        }
+
+        previousPostCount = currentPostCount;
+        actualScrolls++;
+
+        // Stop if we have enough posts for the requested range
+        if (currentPostCount >= endIndex) {
+          console.log(`✓ Loaded enough posts (${currentPostCount} >= ${endIndex})`);
+          break;
         }
       }
-      showProgress(scrollIterations, scrollIterations, 'Scrolling complete');
-      console.log('✓ Posts loaded');
+
+      showProgress(actualScrolls, scrollIterations, 'Scrolling complete');
+      console.log(`✓ Scrolling complete (${actualScrolls} iterations)`);
 
       // Extract post links
       console.log('\n=== Extracting post links ===');
@@ -951,9 +1051,8 @@ async function scrapeInstagram(options) {
     // Extract username from profile URL for backup (may not exist in direct post mode)
     const username = isDirectPost ? extractUsername(profileUrl) || 'unknown' : extractUsername(profileUrl);
 
-    // Save to local file
-    console.log('→ Saving local backup...');
-    const backupPath = apiClient.saveToLocal(vpsSessionId || 'local', {
+    // Prepare JSON data structure
+    const jsonData = {
       profileUrl,
       username,
       timestamp: new Date().toISOString(),
@@ -964,8 +1063,20 @@ async function scrapeInstagram(options) {
         withPhone: phoneCount,
         range: { start: startIndex, end: endIndex }
       }
-    });
+    };
+
+    // Save to local file
+    console.log('→ Saving local backup...');
+    const backupPath = apiClient.saveToLocal(vpsSessionId || 'local', jsonData);
     console.log('✓ Local backup saved:', backupPath);
+
+    // Create CSV for Claude parsing
+    console.log('→ Creating CSV for Claude parsing...');
+    // Extract session ID from backup path
+    const sessionMatch = backupPath.match(/scraped-([a-f0-9]+)-/);
+    const sessionId = sessionMatch ? sessionMatch[1] : vpsSessionId || 'local';
+    const csvPath = createCsvForParsing(sessionId, jsonData);
+    console.log('✓ CSV created for parsing:', csvPath);
 
     // Update VPS session
     if (vpsSessionId) {
@@ -982,7 +1093,12 @@ async function scrapeInstagram(options) {
       }
     }
 
-    console.log('\n=== Done! ===\n');
+    console.log('\n=== Done! ===');
+    console.log('\n📋 Next Steps:');
+    console.log('1. Read the documentation: claudeasscrapingLLM.md');
+    console.log('2. Prompt Claude to read the CSV file for parsing');
+    console.log('3. View parsed results at: http://localhost:3003/parse-manager.html?file=' + path.basename(backupPath));
+    console.log('');
 
     return {
       sessionId: vpsSessionId,

@@ -474,7 +474,7 @@
     <div class="header">
       <div>
         <h1>🤖 Claude Parse Manager</h1>
-        <p class="subtitle">Manual AI-powered caption parsing using CLI</p>
+        <p class="subtitle">AI-powered caption parsing - CSV auto-created after scraping</p>
       </div>
       <div class="actions">
         <a href="results.html" class="btn btn-secondary">← Back to Results</a>
@@ -484,15 +484,17 @@
 
     <!-- Instructions -->
     <div class="instructions">
-      <h3>📋 How to Use (Manual Workflow)</h3>
+      <h3>📋 Simplified Workflow with Claude</h3>
       <ol>
-        <li>From <strong>Results</strong> page, click <strong>🤖 Parse</strong> to create CSV from scraped data</li>
-        <li>Run <code>node processParse.js list</code> to see all sessions</li>
-        <li>Run <code>node processParse.js prepare &lt;sessionId&gt;</code> to prepare captions for Claude</li>
-        <li>Copy the output and paste it to Claude for processing</li>
-        <li>Claude will return JSON - run <code>node processParse.js apply &lt;sessionId&gt; '&lt;json&gt;'</code></li>
-        <li>Click <strong>Send to VPS</strong> button when parsing is complete</li>
+        <li><strong>After scraping completes</strong>, CSV is automatically created at <code>parsed/parsed-{sessionId}-{timestamp}.csv</code></li>
+        <li>Prompt Claude: <code>"Read claudeasscrapingLLM.md and read the CSV file at parsed/[filename].csv to parse the captions"</code></li>
+        <li>Claude will parse all captions and return updated CSV with event information</li>
+        <li>Replace the CSV file with Claude's output (or edit manually in this page)</li>
+        <li>Click <strong>Send to VPS</strong> when parsing is complete</li>
       </ol>
+      <p style="margin-top: 15px; padding: 10px; background: #fff; border-radius: 8px; font-size: 13px;">
+        <strong>📄 Documentation:</strong> <a href="claudeasscrapingLLM.md" target="_blank">claudeasscrapingLLM.md</a> - Contains complete instructions for Claude to parse your scraped data
+      </p>
     </div>
 
     <!-- Stats -->
@@ -576,7 +578,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <h3>No parsed results found</h3>
-          <p>Run <code>node processParse.js prepare &lt;sessionId&gt;</code> to parse captions</p>
+          <p>Ask Claude to parse the CSV file. See <a href="claudeasscrapingLLM.md" target="_blank">claudeasscrapingLLM.md</a> for instructions.</p>
         </div>
       </div>
     </div>
@@ -591,7 +593,7 @@
             <th>Posts</th>
             <th>Parse Status</th>
             <th>VPS</th>
-            <th>CLI Command</th>
+            <th>Next Step</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -604,7 +606,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         <h3>No parse sessions found</h3>
-        <p>Go to Results page to create CSV files from scraped data</p>
+        <p>CSV files are auto-created after scraping. Go to <a href="index.html">Scrape</a> or <a href="results.html">Results</a> page to start scraping.</p>
       </div>
     </div>
   </div>
@@ -689,16 +691,12 @@
           </td>
           <td>
             ${session.parseStatus === 'pending'
-              ? `<code style="font-size:11px;background:#f5f5f5;padding:4px 8px;border-radius:4px;">node processParse.js prepare ${session.sessionId}</code>`
+              ? `<span style="color:#2196f3;font-size:11px;">📄 Ask Claude to parse CSV</span>`
               : `<span style="color:#4caf50;font-size:12px;">✓ Ready for VPS</span>`
             }
           </td>
           <td>
             <div class="actions-cell">
-              ${session.parseStatus === 'pending'
-                ? `<button class="btn btn-secondary btn-sm" onclick="createCsv('${session.jsonFile}')" ${session.jsonFile ? '' : 'disabled'}>Create CSV</button>`
-                : ''
-              }
               ${(session.parseStatus === 'parsed' || session.parseStatus === 'done')
                 ? `<button class="btn btn-primary btn-sm" onclick="viewResults('${session.jsonFile}')">📊 View Results</button>`
                 : ''
@@ -752,7 +750,7 @@
 
         const data = await response.json();
         if (data.success) {
-          alert('CSV created! Now run:\n\nnode processParse.js prepare ' + data.sessionId);
+          alert('CSV created! Now ask Claude to read:\n\n' + data.csvPath + '\n\nAnd parse according to claudeasscrapingLLM.md');
           loadSessions();
         } else {
           alert('Failed to create CSV: ' + (data.error || 'Unknown error'));
@@ -810,18 +808,59 @@
           renderParsedResults(data);
           showParsedResultsView();
         } else {
-          showParsedEmptyState();
+          // CSV doesn't exist, try to create it first
+          if (data.error && data.error.includes('not found')) {
+            console.log('CSV not found, creating from JSON...');
+            await createCsvFromJson(file, sessionId);
+          } else {
+            showParsedEmptyState();
+          }
         }
       } catch (error) {
         console.error('Failed to load parsed results:', error);
-        document.getElementById('parsedResultsTableBody').innerHTML = `
-          <tr>
-            <td colspan="9" style="text-align: center; color: #c62828;">
-              Failed to load results: ${error.message}
-            </td>
-          </tr>
-        `;
-        showParsedResultsView();
+        // Try to create CSV if it doesn't exist
+        try {
+          await createCsvFromJson(file, sessionId);
+        } catch (createError) {
+          document.getElementById('parsedResultsTableBody').innerHTML = `
+            <tr>
+              <td colspan="9" style="text-align: center; color: #c62828;">
+                Failed to load results: ${error.message}
+              </td>
+            </tr>
+          `;
+          showParsedResultsView();
+        }
+      }
+    }
+
+    async function createCsvFromJson(file, sessionId) {
+      try {
+        const response = await fetch('/api/parse/create-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonFile: file })
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          console.log('CSV created successfully');
+          // Now load the parsed results
+          const csvResponse = await fetch(`/api/parse/csv-data?sessionId=${sessionId}`);
+          const csvData = await csvResponse.json();
+          if (csvData.posts && csvData.posts.length > 0) {
+            currentSessionData = csvData;
+            renderParsedResults(csvData);
+            showParsedResultsView();
+          } else {
+            showParsedEmptyState();
+          }
+        } else {
+          throw new Error(data.error || 'Failed to create CSV');
+        }
+      } catch (error) {
+        console.error('Failed to create CSV:', error);
+        throw error;
       }
     }
 

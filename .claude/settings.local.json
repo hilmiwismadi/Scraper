@@ -18,7 +18,11 @@
       "Bash(\"C:\\\\Users\\\\L E N O V O\\\\AppData\\\\Local\\\\Programs\\\\Ollama\\\\ollama.exe\" rm gemma2:9b)",
       "Bash(del:*)",
       "Bash(node:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(python:*)",
+      "Bash(copy:*)",
+      "Bash(ls:*)",
+      "Bash(curl:*)"
     ]
   }
 }

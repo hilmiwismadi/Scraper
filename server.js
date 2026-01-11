@@ -241,7 +241,7 @@ app.post('/api/debug/start', async (req, res) => {
     // Pass the post URL directly - scraper will detect if it's a post or profile URL
     const start = parseInt(startIndex) || 0;
     const end = parseInt(endIndex) || 1;
-    const args = [postLink, '--start', String(start), '--end', String(end), '--debug', '--session', sessionId];
+    const args = [postLink, '--start', String(start), '--end', String(end), '--auth', '--debug', '--session', sessionId];
 
     const env = {
       ...process.env,
@@ -460,8 +460,15 @@ app.post('/api/parse/create-csv', (req, res) => {
     const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
     const sessionId = extractSessionId(jsonFile);
 
-    // Create CSV for this session
-    const csvPath = path.join(__dirname, 'parsed', `parsed-${sessionId}-${Date.now()}.csv`);
+    // Get increment number for this session (count existing CSV files for this session)
+    const parsedDir = path.join(__dirname, 'parsed');
+    const existingFiles = fs.readdirSync(parsedDir)
+      .filter(f => f.startsWith(`parsed-${sessionId}-`) && f.endsWith('.csv'))
+      .length;
+    const increment = existingFiles + 1;
+
+    // Create CSV for this session with increment number
+    const csvPath = path.join(__dirname, 'parsed', `parsed#${increment}-${sessionId}-${Date.now()}.csv`);
     const csvHeaders = 'session_id,json_file,post_index,post_url,original_caption,extracted_title,extracted_organizer,extracted_date,extracted_location,registration_fee,phone_numbers,contact_persons,parse_status,parse_timestamp,last_edited\n';
 
     let csvContent = csvHeaders;
@@ -492,12 +499,16 @@ app.post('/api/parse/create-csv', (req, res) => {
     // Update sessions index
     const indexPath = ensureSessionsIndex();
     const indexContent = fs.readFileSync(indexPath, 'utf8');
-    const newEntry = `${sessionId},${jsonFile},${jsonData.username || ''},${jsonData.profileUrl || ''},${jsonData.timestamp || ''},${jsonData.posts?.length || 0},pending,,,0,\n`;
+    const newEntry = `${sessionId},parsed#${increment}-${sessionId}-${Date.now()}.csv,${jsonData.username || ''},${jsonData.profileUrl || ''},${jsonData.timestamp || ''},${jsonData.posts?.length || 0},pending,,,0,\n`;
     fs.appendFileSync(indexPath, newEntry, 'utf8');
+
+    // Extract just the filename for the response
+    const csvFileName = path.basename(csvPath);
 
     res.json({
       success: true,
-      csvPath: `/parsed/parsed-${sessionId}-${Date.now()}.csv`,
+      csvPath: `/parsed/${csvFileName}`,
+      csvFileName,
       sessionId,
       totalPosts: jsonData.posts?.length || 0
     });
@@ -519,13 +530,42 @@ app.get('/api/parse/sessions', (req, res) => {
     const content = fs.readFileSync(indexPath, 'utf8');
     const lines = content.trim().split('\n').slice(1); // Skip header
 
+    // Helper function to parse CSV line with quoted fields
+    function parseCSVLine(line) {
+      const result = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      result.push(current);
+      return result;
+    }
+
     const sessions = lines
       .filter(line => line.trim())
       .map(line => {
+        const parts = parseCSVLine(line);
         const [
           sessionId, jsonFile, username, profileUrl, scrapeTimestamp,
           totalPosts, parseStatus, parseTimestamp, vpsSent, vpsSentTimestamp
-        ] = line.split(',');
+        ] = parts;
 
         return {
           sessionId,
