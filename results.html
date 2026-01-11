@@ -163,6 +163,22 @@
       color: #e65100;
     }
 
+    .status-done,
+    .status-parsed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-parsing {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .status-error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
     .phone-badge {
       background: #ff9800;
       color: white;
@@ -347,6 +363,7 @@
             <th>Status</th>
             <th>Posts Scraped</th>
             <th>Phones</th>
+            <th>Parse Status</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -427,18 +444,28 @@
       const tbody = document.getElementById('sessionsTableBody');
       tbody.innerHTML = '';
 
-      sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      // Sort by file modification time (newest first) - use file's mtime if available, otherwise timestamp
+      sessions.sort((a, b) => {
+        const timeA = a.mtime ? new Date(a.mtime) : (a.timestamp ? new Date(a.timestamp) : new Date(0));
+        const timeB = b.mtime ? new Date(b.mtime) : (b.timestamp ? new Date(b.timestamp) : new Date(0));
+        return timeB - timeA;
+      });
 
       sessions.forEach(session => {
         const tr = document.createElement('tr');
-        const date = new Date(session.timestamp);
+        // Use mtime (file modification time) if available, otherwise timestamp
+        const date = new Date(session.mtime || session.timestamp || Date.now());
         const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
         const hasPhone = (session.summary?.withPhone || 0) > 0;
+        const sessionId = session.sessionId || extractSessionId(session.file);
+        const parseStatus = session.parseStatus || 'pending';
+        const parseStatusClass = `status-${parseStatus === 'parsed' ? 'done' : parseStatus}`;
+        const parseStatusText = parseStatus === 'parsed' ? 'Done' : (parseStatus === 'pending' ? 'Pending' : parseStatus);
 
         tr.innerHTML = `
           <td>
             <div>${formattedDate}</div>
-            <div style="font-size: 11px; color: #999;">${session.sessionId || 'N/A'}</div>
+            <div style="font-size: 11px; color: #999;">${sessionId || 'N/A'}</div>
           </td>
           <td>
             <a href="${session.profileUrl}" target="_blank">${session.username || 'Unknown'}</a>
@@ -453,8 +480,14 @@
             }
           </td>
           <td>
+            <span class="status-badge ${parseStatusClass}">${parseStatusText}</span>
+          </td>
+          <td>
             <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="viewSession('${session.file}')">
               View Details
+            </button>
+            <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="openParseManager('${session.file}')">
+              🤖 Parse
             </button>
           </td>
         `;
@@ -596,6 +629,17 @@
 
     function closeCaptionModal() {
       document.getElementById('captionModal').classList.remove('active');
+    }
+
+    // Helper: Extract session ID from filename
+    function extractSessionId(filename) {
+      const match = filename.match(/scraped-([a-f0-9]+)-/);
+      return match ? match[1] : filename;
+    }
+
+    // Open parse manager for a session
+    function openParseManager(jsonFile) {
+      window.location.href = `parse-manager.html?file=${encodeURIComponent(jsonFile)}`;
     }
 
     // Close modal on outside click

@@ -2,7 +2,6 @@ import { Builder, By, until, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import dotenv from 'dotenv';
 import apiClient from './apiClient.js';
-import llmService from './llmService.js';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
@@ -103,8 +102,23 @@ async function broadcastDebugData(type, data) {
 
 // Utility functions
 function extractUsername(profileUrl) {
+  // Handle direct post URLs: https://www.instagram.com/p/XXXXX/ or https://www.instagram.com/username/p/XXXXX/
+  const postMatch = profileUrl.match(/instagram\.com\/([^\/]+)\/p\//);
+  if (postMatch) {
+    return postMatch[1]; // Return username from /username/p/ format
+  }
+
+  // Handle profile URLs: https://www.instagram.com/username/
   const match = profileUrl.match(/instagram\.com\/([^\/]+)/);
-  return match ? match[1].replace('/', '') : null;
+  if (match) {
+    const part = match[1];
+    // If it's "p", it's a direct post URL without username, return unknown
+    if (part === 'p') {
+      return 'unknown-post';
+    }
+    return part.replace('/', '');
+  }
+  return null;
 }
 
 function extractPhoneNumbers(text) {
@@ -580,11 +594,13 @@ async function scrapeInstagram(options) {
 
     // Check if this is direct post mode (for debugging single posts)
     let postsToScrape = [];
+    let adjustedStartIndex = startIndex; // Define here so it's available in both modes
 
     if (isDirectPost) {
       console.log('\n=== Direct Post Mode ===');
       console.log('→ Going directly to post:', profileUrl);
       postsToScrape = [profileUrl];
+      adjustedStartIndex = 0; // For direct post, index is 0
     } else {
       // Normal profile scraping mode
       const username = extractUsername(profileUrl);
@@ -607,12 +623,19 @@ async function scrapeInstagram(options) {
       // Scroll to load posts
       console.log('\n=== Loading posts by scrolling ===');
       console.log('→ Target: need to load at least', endIndex, 'posts for range', startIndex, '-', endIndex);
-      const scrollIterations = 30;
+
+      // Calculate scroll iterations based on how many posts we need
+      // Instagram loads about 12 posts per scroll, so calculate needed scrolls
+      const postsNeeded = endIndex;
+      const postsPerScroll = 12;
+      const scrollIterations = Math.ceil(postsNeeded / postsPerScroll) + 2; // +2 for buffer
+      console.log('→ Will scroll', scrollIterations, 'times to load at least', postsNeeded, 'posts');
+
       for (let i = 0; i < scrollIterations; i++) {
         await driver.executeScript('window.scrollTo(0, document.body.scrollHeight)');
         await driver.sleep(2000);
 
-        if ((i + 1) % 5 === 0) {
+        if ((i + 1) % 5 === 0 || i === scrollIterations - 1) {
           showProgress(i + 1, scrollIterations, `Scrolling... (${i + 1}/${scrollIterations})`);
           console.log('  Scrolled', i + 1, 'times...');
         }
@@ -855,42 +878,16 @@ async function scrapeInstagram(options) {
         const imageUrl = imageMatch ? imageMatch[1] : null;
         console.log('  Image:', imageUrl ? 'Found' : 'Not found');
 
-        // Parse caption with LLM for intelligent extraction
-        console.log('→ Parsing caption with LLM...');
-        const llmResult = await llmService.parseCaptionWithLLM(caption);
-
-        // Fallback to regex if LLM fails or is disabled
-        let phone1, phone2, phone3, phone4, allPhones, eventTitle, eventOrganizer;
-
-        if (llmResult.extractedBy === 'llm' && llmResult.phoneNumbers.length > 0) {
-          // Use LLM results
-          console.log('  ✓ LLM extraction successful');
-          eventTitle = llmResult.eventTitle || parseEventTitle(caption);
-          eventOrganizer = llmResult.eventOrganizer || parseOrganizer(caption);
-          allPhones = llmResult.phoneNumbers;
-          phone1 = allPhones[0] || null;
-          phone2 = allPhones[1] || null;
-          phone3 = allPhones[2] || null;
-          phone4 = allPhones[3] || null;
-
-          console.log('  Event Title:', eventTitle || 'N/A');
-          console.log('  Organizer:', eventOrganizer || 'N/A');
-          console.log('  Event Date:', llmResult.eventDate || 'N/A');
-          console.log('  Event Location:', llmResult.eventLocation || 'N/A');
-          console.log('  Registration Fee:', llmResult.registrationFee || 'N/A');
-          console.log('  Contact Persons:', llmResult.contactPersons.join(', ') || 'N/A');
-        } else {
-          // Fallback to regex extraction
-          console.log('  Using regex fallback (LLM disabled or failed)');
-          const regexResult = extractPhoneNumbers(caption);
-          phone1 = regexResult.phone1;
-          phone2 = regexResult.phone2;
-          phone3 = regexResult.phone3;
-          phone4 = regexResult.phone4;
-          allPhones = regexResult.allPhones;
-          eventTitle = parseEventTitle(caption);
-          eventOrganizer = parseOrganizer(caption);
-        }
+        // Extract phone numbers and event info using regex
+        console.log('→ Parsing caption with regex...');
+        const regexResult = extractPhoneNumbers(caption);
+        const phone1 = regexResult.phone1;
+        const phone2 = regexResult.phone2;
+        const phone3 = regexResult.phone3;
+        const phone4 = regexResult.phone4;
+        const allPhones = regexResult.allPhones;
+        const eventTitle = parseEventTitle(caption);
+        const eventOrganizer = parseOrganizer(caption);
 
         console.log('  Phone 1:', phone1 || 'None');
         console.log('  Phone 2:', phone2 || 'None');
@@ -910,13 +907,7 @@ async function scrapeInstagram(options) {
           phoneNumber4: phone4,
           allPhones: allPhones,
           imageUrl,
-          caption,
-          // Additional LLM-extracted fields
-          eventDate: llmResult.eventDate || null,
-          eventLocation: llmResult.eventLocation || null,
-          registrationFee: llmResult.registrationFee || null,
-          contactPersons: llmResult.contactPersons || [],
-          extractedBy: llmResult.extractedBy || 'regex'
+          caption
         };
 
         scrapedData.push(postData);
@@ -965,6 +956,8 @@ async function scrapeInstagram(options) {
     const backupPath = apiClient.saveToLocal(vpsSessionId || 'local', {
       profileUrl,
       username,
+      timestamp: new Date().toISOString(),
+      startTime: new Date().toISOString(),
       posts: scrapedData,
       summary: {
         total: scrapedCount,

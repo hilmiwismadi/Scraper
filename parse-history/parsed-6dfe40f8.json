@@ -1,0 +1,374 @@
+[
+  {
+    "postIndex": 10,
+    "title": "PASCAL XIV (Parade Of Art, Sains, And Religion) 2026",
+    "organizer": "SMAN 10 Fajar Harapan Banda Aceh",
+    "date": "2026-01-22",
+    "location": "SMAN 10 Fajar Harapan Banda Aceh",
+    "fee": "Not specified",
+    "phones": ["082133030490", "08977221641", "085199110166"],
+    "contacts": [
+      {"name": "Hanisah", "phone": "082133030490"},
+      {"name": "Zarin", "phone": "08977221641"},
+      {"name": "Nadhirah", "phone": "085199110166"}
+    ]
+  },
+  {
+    "postIndex": 11,
+    "title": "Sejuta Cita Future Leaders Chapter 12: Japan",
+    "organizer": "Sejuta Cita",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 12,
+    "title": "KIR SCIENTIFIC COMPETITION",
+    "organizer": "Kelompok Ilmiah Remaja SMA Negeri 11 Semarang",
+    "date": "2026-04-25",
+    "location": "SMA Negeri 11 Semarang",
+    "fee": "Not specified",
+    "phones": ["6285975156951", "62882003392528"],
+    "contacts": [
+      {"name": "Evi", "phone": "6285975156951"},
+      {"name": "Widya", "phone": "62882003392528"}
+    ]
+  },
+  {
+    "postIndex": 13,
+    "title": "Competition For Islamic Students (CIS) 14",
+    "organizer": "PTQT Al-Hikmah Bobos",
+    "date": "2026-02-02",
+    "location": "PTQT Al-Hikmah Bobos, Cirebon",
+    "fee": "Not specified",
+    "phones": ["6285147724793", "6285147366809"],
+    "contacts": [
+      {"name": "Dinar", "phone": "6285147724793"},
+      {"name": "Aziz", "phone": "6285147366809"}
+    ]
+  },
+  {
+    "postIndex": 14,
+    "title": "FESTIVAL ILMIAH SANTRI 2026",
+    "organizer": "FIS Al-Hikam Malang",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": ["62882006133383", "6287855311006", "6282142871001", "6281559855154"],
+    "contacts": [
+      {"name": "Zizou", "phone": "62882006133383"},
+      {"name": "Nabiel", "phone": "6287855311006"},
+      {"name": "Khoirul", "phone": "6282142871001"},
+      {"name": "Fatoni", "phone": "6281559855154"}
+    ]
+  },
+  {
+    "postIndex": 15,
+    "title": "Kompetisi Literasi Biologi ALSEACE 2026",
+    "organizer": "Panitia Biologi ALSEACE 2026",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Rp100.000",
+    "phones": ["081513345337", "088211854815"],
+    "contacts": [
+      {"name": "Clarissa Almaida Queenarra", "phone": "081513345337"},
+      {"name": "Shakila Nafisa Wibowo", "phone": "088211854815"}
+    ]
+  },
+  {
+    "postIndex": 16,
+    "title": "Not a competition post",
+    "organizer": "Not applicable",
+    "date": "Not applicable",
+    "location": "Not applicable",
+    "fee": "Not applicable",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 17,
+    "title": "Lomba MQK Se Jawa Timur Kitab Fathul Qorib",
+    "organizer": "Not specified",
+    "date": "2026-01-29",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 18,
+    "title": "SORANA SECTION 2026",
+    "organizer": "OSIS SMA Al-Islam 1 Surakarta",
+    "date": "2026-01-10",
+    "location": "Jl. Honggowongsono no.94, Palaran, Laweyan, Surakarta",
+    "fee": "Not specified",
+    "phones": ["6282137236791", "6285727301850"],
+    "contacts": [
+      {"name": "Oliv", "phone": "6282137236791"},
+      {"name": "Fatma", "phone": "6285727301850"}
+    ]
+  },
+  {
+    "postIndex": 19,
+    "title": "FESTIVAL BANJARI SYMPHONY 2026",
+    "organizer": "MAN Siduarjo",
+    "date": "2026-02-07",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": ["6281211951503", "6282332084001"],
+    "contacts": [
+      {"name": "Dhilah", "phone": "6281211951503"},
+      {"name": "Najela", "phone": "6282332084001"}
+    ]
+  },
+  {
+    "postIndex": 20,
+    "title": "ASTRON CUP 12",
+    "organizer": "OSIS SMA Al-Hasra",
+    "date": "2026-01-10",
+    "location": "SMA Al-Hasra",
+    "fee": "See competition booklet",
+    "phones": ["085781266358", "08116882610"],
+    "contacts": [
+      {"name": "Hana", "phone": "085781266358"},
+      {"name": "Mula", "phone": "08116882610"}
+    ]
+  },
+  {
+    "postIndex": 21,
+    "title": "IGNITE FUTURE FEST 2026",
+    "organizer": "Futura Innovation Hub dan UIN Sunan Gunung Djati Bandung",
+    "date": "2026-04-04",
+    "location": "Bandung",
+    "fee": "FREE (bersyarat)",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 22,
+    "title": "LOMBA TRY OUT UTBK AISC 2026",
+    "organizer": "AISC X Bimbel Bintang Pelajar",
+    "date": "2026-01-22",
+    "location": "Not specified",
+    "fee": "GRATIS",
+    "phones": ["6285117848841", "6285117848843"],
+    "contacts": [
+      {"name": "Competition", "phone": "6285117848841"},
+      {"name": "Competition", "phone": "6285117848843"}
+    ]
+  },
+  {
+    "postIndex": 23,
+    "title": "SL CUP 2026",
+    "organizer": "UPH Medan",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 24,
+    "title": "JASFEST 2026 (El Jasmeen Festival)",
+    "organizer": "El Jasmeen",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Gel 1: 20k-25k, Gel 2: 30k-35k",
+    "phones": ["081336660705", "089524043077", "081224814851", "081515007803", "085755565418", "082135527931", "08563319536", "083197548786"],
+    "contacts": [
+      {"name": "Usth. Ayu", "phone": "081336660705"},
+      {"name": "Ust. Febri", "phone": "089524043077"},
+      {"name": "Usth Tasya", "phone": "081224814851"},
+      {"name": "Ust Ali", "phone": "081515007803"},
+      {"name": "Usth Firda", "phone": "085755565418"},
+      {"name": "Usth Wulan", "phone": "082135527931"},
+      {"name": "Ust Miftah", "phone": "08563319536"},
+      {"name": "Usth Lilis", "phone": "083197548786"}
+    ]
+  },
+  {
+    "postIndex": 25,
+    "title": "Lomba Bidang Studi Kimia XXII - LBSK",
+    "organizer": "HIMAKI FMIPA UNTAN",
+    "date": "2026-03-01",
+    "location": "Not specified",
+    "fee": "Rp20.000-40.000",
+    "phones": ["085828340943", "082158378277", "089509066292", "085712450569"],
+    "contacts": [
+      {"name": "Siti Hutsiyah", "phone": "085828340943"},
+      {"name": "Najwa Nur Azwina", "phone": "082158378277"},
+      {"name": "Karisma Apriana", "phone": "089509066292"},
+      {"name": "Gloria Mayva Nayoan", "phone": "085712450569"}
+    ]
+  },
+  {
+    "postIndex": 26,
+    "title": "AMC 2K26 (Almus Competition)",
+    "organizer": "OSIS SMA Al Muslim",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Cheaper registration fee",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 27,
+    "title": "Lomba Poster Digital Nasional DINUSFEST 2026",
+    "organizer": "KAMADIKSI Universitas Dian Nuswantoro",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 28,
+    "title": "SEMINAR NASIONAL & NATIONAL CREATIVITY COMPETITION (NCC)",
+    "organizer": "HIMABIDA",
+    "date": "2026-01-25",
+    "location": "Online (Zoom)",
+    "fee": "Rp 25.000-30.000",
+    "phones": ["082372382202"],
+    "contacts": [
+      {"name": "Eva", "phone": "082372382202"}
+    ]
+  },
+  {
+    "postIndex": 29,
+    "title": "FUN IN SEE (FIS) 2026",
+    "organizer": "Not specified",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 30,
+    "title": "Not a competition post - Calendar info only",
+    "organizer": "Not applicable",
+    "date": "Not applicable",
+    "location": "Not applicable",
+    "fee": "Not applicable",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 31,
+    "title": "THE RASYAD GRAND CHAMPIONSHIP 2026 (TRGC 2026)",
+    "organizer": "OSIS El Rasyad Islamic Junior High School",
+    "date": "2026-02-02",
+    "location": "El Rasyad Islamic Junior High School",
+    "fee": "Rp100.000-350.000",
+    "phones": ["6285211361176", "6285133835256", "6285966443205", "6281293396406"],
+    "contacts": [
+      {"name": "Hafidz", "phone": "6285211361176"},
+      {"name": "Azmee", "phone": "6285133835256"},
+      {"name": "Arkan", "phone": "6285966443205"},
+      {"name": "Gaza", "phone": "6281293396406"}
+    ]
+  },
+  {
+    "postIndex": 32,
+    "title": "THE RASYAD GRAND CHAMPIONSHIP 2026 - Speech Competition",
+    "organizer": "OSIS El Rasyad Islamic Junior High School",
+    "date": "2026-02-02",
+    "location": "Aula SMP El Rasyad, Jakarta Selatan",
+    "fee": "Rp125.000",
+    "phones": ["085133835256"],
+    "contacts": [
+      {"name": "Azmee", "phone": "085133835256"}
+    ]
+  },
+  {
+    "postIndex": 33,
+    "title": "NEO-GEN Footwear Competition",
+    "organizer": "Prodi Desain Produk, Craft & Fashion Universitas Paramadina bersama PT. Mitra Alas Selaras",
+    "date": "Not specified",
+    "location": "Kampus Cipayung Universitas Paramadina, Jakarta Timur",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 34,
+    "title": "ZISTION - Education Olympiad (ZEO 2026)",
+    "organizer": "SMA Al Izzah",
+    "date": "2026-03-28",
+    "location": "Not specified",
+    "fee": "Rp 35.000-55.000",
+    "phones": ["081258540907"],
+    "contacts": [
+      {"name": "Amalia", "phone": "081258540907"}
+    ]
+  },
+  {
+    "postIndex": 35,
+    "title": "Dance Competition Bangor Fest Vol 4",
+    "organizer": "Bangor Fest",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "GRATIS",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 36,
+    "title": "OLIMFEST (Olimpiade Festival Nusantara) 2025",
+    "organizer": "Olimnesia",
+    "date": "2026-01-24",
+    "location": "Online di platform olimnesia.com",
+    "fee": "GRATIS bersyarat atau Rp29.000-39.000",
+    "phones": ["0882009830654"],
+    "contacts": [
+      {"name": "Whatsapp", "phone": "0882009830654"}
+    ]
+  },
+  {
+    "postIndex": 37,
+    "title": "INFEST Competition 2026",
+    "organizer": "HMSI Universitas Tanjungpura",
+    "date": "Not specified",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 38,
+    "title": "Lomba Cipta dan Baca Puisi",
+    "organizer": "STIM Budi Bakti",
+    "date": "2026-01-17",
+    "location": "Not specified",
+    "fee": "25k/Puisi",
+    "phones": ["6289638913017"],
+    "contacts": [
+      {"name": "Adin", "phone": "6289638913017"}
+    ]
+  },
+  {
+    "postIndex": 39,
+    "title": "Nusantara Scout Competitions Season 3 (NSC Season 3 2026)",
+    "organizer": "Yayasan Nusantara Citayam",
+    "date": "2026-01-10",
+    "location": "Yayasan Pendidikan Nusantara Citayam",
+    "fee": "Rp. 250.000 Per Regu",
+    "phones": [],
+    "contacts": []
+  },
+  {
+    "postIndex": 40,
+    "title": "AJANG KREASI LOMBA ESAI NASIONAL",
+    "organizer": "Not specified",
+    "date": "2026-01-30",
+    "location": "Not specified",
+    "fee": "Not specified",
+    "phones": ["082161262567", "082288038243"],
+    "contacts": [
+      {"name": "Chintia Regina Sidabutar", "phone": "082161262567"},
+      {"name": "Annisa Qurratul Aini", "phone": "082288038243"}
+    ]
+  }
+]

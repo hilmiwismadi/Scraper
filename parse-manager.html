@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Parse Manager - Instagram Scraper</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .header .subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .header .actions {
+      display: flex;
+      gap: 15px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-sm {
+      padding: 8px 16px;
+      font-size: 12px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .stat-card .label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #667eea;
+      margin-top: 5px;
+    }
+
+    .table-container {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      border-bottom: 2px solid #e0e0e0;
+    }
+
+    th {
+      text-align: left;
+      padding: 15px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #666;
+      font-weight: 600;
+    }
+
+    td {
+      padding: 15px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    tr:hover {
+      background: #f8f9fa;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .status-done,
+    .status-parsed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .vps-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .vps-pending {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .actions-cell {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .instructions {
+      background: #e3f2fd;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-left: 4px solid #2196f3;
+    }
+
+    .instructions h3 {
+      color: #1976d2;
+      margin-bottom: 10px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .instructions code {
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Consolas', monospace;
+      font-size: 13px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .empty-state svg {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 20px;
+      opacity: 0.3;
+    }
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .editable-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .editable-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .editable-input::placeholder {
+      color: #ccc;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 900px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h2 {
+      font-size: 24px;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+    }
+
+    .caption-item {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-left: 4px solid #ddd;
+    }
+
+    .caption-item.good {
+      border-left-color: #4caf50;
+      background: #e8f5e9;
+    }
+
+    .caption-item.bad {
+      border-left-color: #f44336;
+      background: #ffebee;
+    }
+
+    .caption-item.partial {
+      border-left-color: #ff9800;
+      background: #fff3e0;
+    }
+
+    .caption-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .caption-post-index {
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    .caption-status {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-good {
+      background: #4caf50;
+      color: white;
+    }
+
+    .status-bad {
+      background: #f44336;
+      color: white;
+    }
+
+    .status-partial {
+      background: #ff9800;
+      color: white;
+    }
+
+    .caption-text {
+      font-size: 13px;
+      color: #333;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+
+    .caption-parsed {
+      font-size: 12px;
+      color: #666;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .caption-parsed strong {
+      color: #333;
+    }
+
+    /* Inline caption popup */
+    .caption-popup {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      width: 500px;
+      max-height: 80vh;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+
+    .caption-popup.active {
+      display: block;
+    }
+
+    .caption-popup h4 {
+      margin: 0 0 10px 0;
+      color: #667eea;
+      font-size: 14px;
+    }
+
+    .caption-popup .caption-text {
+      color: #333;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      margin-bottom: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .caption-popup .parse-info {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 11px;
+    }
+
+    .caption-popup .parse-info div {
+      margin: 3px 0;
+    }
+
+    .caption-popup .close-popup {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: #999;
+    }
+
+    .caption-popup .close-popup:hover {
+      color: #333;
+    }
+
+    .actions-cell {
+      position: relative;
+    }
+
+    .status-badge {
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🤖 Claude Parse Manager</h1>
+        <p class="subtitle">Manual AI-powered caption parsing using CLI</p>
+      </div>
+      <div class="actions">
+        <a href="results.html" class="btn btn-secondary">← Back to Results</a>
+        <button class="btn btn-secondary" onclick="loadSessions()">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instructions">
+      <h3>📋 How to Use (Manual Workflow)</h3>
+      <ol>
+        <li>From <strong>Results</strong> page, click <strong>🤖 Parse</strong> to create CSV from scraped data</li>
+        <li>Run <code>node processParse.js list</code> to see all sessions</li>
+        <li>Run <code>node processParse.js prepare &lt;sessionId&gt;</code> to prepare captions for Claude</li>
+        <li>Copy the output and paste it to Claude for processing</li>
+        <li>Claude will return JSON - run <code>node processParse.js apply &lt;sessionId&gt; '&lt;json&gt;'</code></li>
+        <li>Click <strong>Send to VPS</strong> button when parsing is complete</li>
+      </ol>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card">
+        <div class="label">Total Sessions</div>
+        <div class="value" id="totalSessions">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Pending</div>
+        <div class="value" id="pendingSessions">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Parsed / Done</div>
+        <div class="value" id="doneSessions">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Sent to VPS</div>
+        <div class="value" id="vpsSentSessions">0</div>
+      </div>
+    </div>
+
+    <!-- Parsed Results View (hidden by default) -->
+    <div id="parsedResultsView" style="display: none;">
+      <div class="header" style="margin-bottom: 20px;">
+        <div>
+          <h2 id="resultsTitle">📊 Parsed Results</h2>
+          <p class="subtitle" id="resultsSubtitle">View and edit parsed event information</p>
+        </div>
+        <div class="actions">
+          <button class="btn btn-secondary" onclick="goBackToSessions()">← Back to Sessions</button>
+          <button class="btn btn-secondary" onclick="showCaptionsModal()">📋 View All Captions</button>
+          <button class="btn btn-success" onclick="saveAllChanges()">💾 Save All Changes</button>
+          <button class="btn btn-primary" onclick="exportToCsv()">📥 Export CSV</button>
+          <button class="btn btn-success" onclick="sendToVpsFromResults()">🚀 Send to VPS</button>
+        </div>
+      </div>
+
+      <!-- Parsed Results Stats -->
+      <div class="stats">
+        <div class="stat-card">
+          <div class="label">Total Posts</div>
+          <div class="value" id="parsedTotalPosts">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Parsed Events</div>
+          <div class="value" id="parsedEvents">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Non-Events</div>
+          <div class="value" id="nonEvents">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">With Contacts</div>
+          <div class="value" id="withContacts">0</div>
+        </div>
+      </div>
+
+      <!-- Parsed Results Table -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th style="width: 200px;">Event Title</th>
+              <th style="width: 150px;">Organizer</th>
+              <th style="width: 120px;">Date</th>
+              <th style="width: 150px;">Location</th>
+              <th style="width: 100px;">Fee</th>
+              <th style="width: 150px;">Contacts</th>
+              <th style="width: 80px;">Status</th>
+              <th style="width: 100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="parsedResultsTableBody">
+            <!-- Parsed results will be loaded here -->
+          </tbody>
+        </table>
+        <div id="parsedEmptyState" class="empty-state" style="display: none;">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3>No parsed results found</h3>
+          <p>Run <code>node processParse.js prepare &lt;sessionId&gt;</code> to parse captions</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions Table -->
+    <div class="table-container" id="sessionsTableView">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Profile</th>
+            <th>Posts</th>
+            <th>Parse Status</th>
+            <th>VPS</th>
+            <th>CLI Command</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sessionsTableBody">
+          <!-- Sessions will be loaded here -->
+        </tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        <h3>No parse sessions found</h3>
+        <p>Go to Results page to create CSV files from scraped data</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Captions Review Modal -->
+  <div id="captionsModal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📋 Captions Review - Parse Quality</h2>
+        <button class="modal-close" onclick="closeCaptionsModal()">&times;</button>
+      </div>
+      <div id="captionsModalBody">
+        <!-- Captions will be loaded here -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allSessions = [];
+    let currentSessionData = null;
+    let currentFile = null;
+    let pendingChanges = new Map();
+
+    // Check for file parameter on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const fileParam = urlParams.get('file');
+      if (fileParam) {
+        loadParsedResults(fileParam);
+      } else {
+        loadSessions();
+      }
+    });
+
+    async function loadSessions() {
+      try {
+        const response = await fetch('/api/parse/sessions');
+        const data = await response.json();
+
+        if (data.sessions && data.sessions.length > 0) {
+          allSessions = data.sessions;
+          renderSessions(data.sessions);
+          updateStats(data.sessions);
+        } else {
+          showEmptyState();
+        }
+      } catch (error) {
+        console.error('Failed to load sessions:', error);
+        document.getElementById('sessionsTableBody').innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; color: #c62828;">
+              Failed to load sessions: ${error.message}
+            </td>
+          </tr>
+        `;
+      }
+    }
+
+    function renderSessions(sessions) {
+      const tbody = document.getElementById('sessionsTableBody');
+      tbody.innerHTML = '';
+
+      sessions.forEach(session => {
+        const tr = document.createElement('tr');
+        const date = session.scrapeTimestamp ? new Date(session.scrapeTimestamp).toLocaleDateString() : 'N/A';
+        const parseStatusClass = `status-${session.parseStatus || 'pending'}`;
+        const parseStatusText = session.parseStatus === 'parsed' ? 'Done' : (session.parseStatus || 'Pending');
+        const pendingCount = parseInt(session.totalPosts) || 0;
+
+        tr.innerHTML = `
+          <td>${date}</td>
+          <td>
+            <a href="${session.profileUrl}" target="_blank">${session.username || 'Unknown'}</a>
+          </td>
+          <td>${session.totalPosts}</td>
+          <td><span class="status-badge ${parseStatusClass}">${parseStatusText}</span></td>
+          <td>
+            ${session.vpsSent
+              ? '<span class="vps-badge">Sent</span>'
+              : '<span class="vps-badge vps-pending">Pending</span>'
+            }
+          </td>
+          <td>
+            ${session.parseStatus === 'pending'
+              ? `<code style="font-size:11px;background:#f5f5f5;padding:4px 8px;border-radius:4px;">node processParse.js prepare ${session.sessionId}</code>`
+              : `<span style="color:#4caf50;font-size:12px;">✓ Ready for VPS</span>`
+            }
+          </td>
+          <td>
+            <div class="actions-cell">
+              ${session.parseStatus === 'pending'
+                ? `<button class="btn btn-secondary btn-sm" onclick="createCsv('${session.jsonFile}')" ${session.jsonFile ? '' : 'disabled'}>Create CSV</button>`
+                : ''
+              }
+              ${(session.parseStatus === 'parsed' || session.parseStatus === 'done')
+                ? `<button class="btn btn-primary btn-sm" onclick="viewResults('${session.jsonFile}')">📊 View Results</button>`
+                : ''
+              }
+              ${(session.parseStatus === 'parsed' || session.parseStatus === 'done') && !session.vpsSent
+                ? `<button class="btn btn-success btn-sm" onclick="sendToVps('${session.sessionId}')">Send to VPS</button>`
+                : ''}
+              ${session.vpsSent ? '<span style="color:#4caf50;font-size:12px;">✓ Sent</span>' : ''}
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('emptyState').style.display = 'none';
+    }
+
+    function updateStats(sessions) {
+      const total = sessions.length;
+      const pending = sessions.filter(s => s.parseStatus === 'pending').length;
+      const done = sessions.filter(s => s.parseStatus === 'parsed' || s.parseStatus === 'done').length;
+      const vpsSent = sessions.filter(s => s.vpsSent).length;
+
+      document.getElementById('totalSessions').textContent = total;
+      document.getElementById('pendingSessions').textContent = pending;
+      document.getElementById('doneSessions').textContent = done;
+      document.getElementById('vpsSentSessions').textContent = vpsSent;
+    }
+
+    function showEmptyState() {
+      document.getElementById('sessionsTableBody').innerHTML = '';
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('totalSessions').textContent = '0';
+      document.getElementById('pendingSessions').textContent = '0';
+      document.getElementById('doneSessions').textContent = '0';
+      document.getElementById('vpsSentSessions').textContent = '0';
+    }
+
+    async function createCsv(jsonFile) {
+      if (!jsonFile) {
+        alert('CSV already created or no JSON file available');
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/parse/create-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonFile })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert('CSV created! Now run:\n\nnode processParse.js prepare ' + data.sessionId);
+          loadSessions();
+        } else {
+          alert('Failed to create CSV: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    async function sendToVps(sessionId) {
+      if (!confirm('Send parsed data to VPS?')) return;
+
+      try {
+        const response = await fetch('/api/parse/send-to-vps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert(`Successfully sent ${data.sentPosts} of ${data.totalPosts} posts to VPS!`);
+          loadSessions();
+        } else {
+          alert('Failed to send: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    // ============================================
+    // PARSED RESULTS FUNCTIONS
+    // ============================================
+
+    function extractSessionIdFromFile(filename) {
+      const match = filename.match(/scraped-([a-f0-9]+)-/);
+      return match ? match[1] : filename.replace('scraped-', '').replace('.json', '');
+    }
+
+    function viewResults(jsonFile) {
+      window.location.href = '?file=' + jsonFile;
+    }
+
+    async function loadParsedResults(file) {
+      currentFile = file;
+      const sessionId = extractSessionIdFromFile(file);
+
+      try {
+        const response = await fetch(`/api/parse/csv-data?sessionId=${sessionId}`);
+        const data = await response.json();
+
+        if (data.posts && data.posts.length > 0) {
+          currentSessionData = data;
+          renderParsedResults(data);
+          showParsedResultsView();
+        } else {
+          showParsedEmptyState();
+        }
+      } catch (error) {
+        console.error('Failed to load parsed results:', error);
+        document.getElementById('parsedResultsTableBody').innerHTML = `
+          <tr>
+            <td colspan="9" style="text-align: center; color: #c62828;">
+              Failed to load results: ${error.message}
+            </td>
+          </tr>
+        `;
+        showParsedResultsView();
+      }
+    }
+
+    function renderParsedResults(data) {
+      const tbody = document.getElementById('parsedResultsTableBody');
+      tbody.innerHTML = '';
+
+      let parsedEvents = 0;
+      let nonEvents = 0;
+      let withContacts = 0;
+
+      data.posts.forEach((post, idx) => {
+        const tr = document.createElement('tr');
+
+        const title = post.extractedTitle || '<em style="color:#999">Not parsed</em>';
+        const organizer = post.extractedOrganizer || '<em style="color:#999">-</em>';
+        const date = post.extractedDate || '<em style="color:#999">-</em>';
+        const location = post.extractedLocation || '<em style="color:#999">-</em>';
+        const fee = post.registrationFee || '<em style="color:#999">-</em>';
+
+        // Count stats
+        if (post.extractedTitle && post.extractedTitle.length > 0) {
+          parsedEvents++;
+        } else {
+          nonEvents++;
+        }
+
+        const phones = post.phoneNumbers || '';
+        if (phones && phones.length > 0) withContacts++;
+
+        const statusClass = post.parseStatus === 'parsed' ? 'status-done' : 'status-pending';
+        const statusText = post.parseStatus || 'pending';
+
+        tr.innerHTML = `
+          <td>${post.postIndex}</td>
+          <td>
+            <input type="text" value="${post.extractedTitle || ''}"
+                   class="editable-input" data-field="title" data-post-idx="${idx}"
+                   placeholder="Event title..." onchange="markChanged(${idx}, 'title', this.value)">
+          </td>
+          <td>
+            <input type="text" value="${post.extractedOrganizer || ''}"
+                   class="editable-input" data-field="organizer" data-post-idx="${idx}"
+                   placeholder="Organizer..." onchange="markChanged(${idx}, 'organizer', this.value)">
+          </td>
+          <td>
+            <input type="date" value="${formatDateForInput(post.extractedDate)}"
+                   class="editable-input" data-field="date" data-post-idx="${idx}"
+                   onchange="markChanged(${idx}, 'date', this.value)">
+          </td>
+          <td>
+            <input type="text" value="${post.extractedLocation || ''}"
+                   class="editable-input" data-field="location" data-post-idx="${idx}"
+                   placeholder="Location..." onchange="markChanged(${idx}, 'location', this.value)">
+          </td>
+          <td>
+            <input type="text" value="${post.registrationFee || ''}"
+                   class="editable-input" data-field="fee" data-post-idx="${idx}"
+                   placeholder="Fee..." onchange="markChanged(${idx}, 'fee', this.value)">
+          </td>
+          <td>
+            <input type="text" value="${phones}"
+                   class="editable-input" data-field="phones" data-post-idx="${idx}"
+                   placeholder="Phone numbers..." onchange="markChanged(${idx}, 'phones', this.value)">
+          </td>
+          <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+          <td>
+            <div class="actions-cell">
+              <a href="${post.postUrl}" target="_blank" class="btn btn-secondary btn-sm" title="View post">🔗</a>
+              <button class="btn btn-secondary btn-sm" onclick="toggleCaptionPopup(${idx}, event)" title="View caption">📄</button>
+              <div id="caption-popup-${idx}" class="caption-popup"></div>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Update stats
+      document.getElementById('parsedTotalPosts').textContent = data.posts.length;
+      document.getElementById('parsedEvents').textContent = parsedEvents;
+      document.getElementById('nonEvents').textContent = nonEvents;
+      document.getElementById('withContacts').textContent = withContacts;
+
+      // Update title
+      document.getElementById('resultsTitle').textContent = '📊 Parsed Results - ' + data.sessionId;
+      document.getElementById('resultsSubtitle').textContent = data.posts.length + ' posts from ' + data.csvPath;
+
+      document.getElementById('parsedEmptyState').style.display = 'none';
+    }
+
+    function formatDateForInput(dateStr) {
+      if (!dateStr || dateStr === 'Not specified' || dateStr === 'Not applicable') return '';
+      // Already in YYYY-MM-DD format
+      return dateStr;
+    }
+
+    function showParsedResultsView() {
+      document.getElementById('parsedResultsView').style.display = 'block';
+      document.getElementById('sessionsTableView').style.display = 'none';
+      document.querySelector('.instructions').style.display = 'none';
+      document.querySelector('.stats').style.display = 'none'; // Hide sessions stats
+    }
+
+    function showSessionsView() {
+      document.getElementById('parsedResultsView').style.display = 'none';
+      document.getElementById('sessionsTableView').style.display = 'block';
+      document.querySelector('.instructions').style.display = 'block';
+      document.querySelector('.stats').style.display = 'grid'; // Show sessions stats
+    }
+
+    function showParsedEmptyState() {
+      document.getElementById('parsedResultsTableBody').innerHTML = '';
+      document.getElementById('parsedEmptyState').style.display = 'block';
+      showParsedResultsView();
+    }
+
+    function goBackToSessions() {
+      // Clear URL parameter
+      window.history.pushState({}, '', window.location.pathname);
+      showSessionsView();
+      loadSessions();
+    }
+
+    function markChanged(postIdx, field, value) {
+      const key = `${postIdx}-${field}`;
+      pendingChanges.set(key, { postIdx, field, value });
+    }
+
+    async function saveAllChanges() {
+      if (pendingChanges.size === 0) {
+        alert('No changes to save!');
+        return;
+      }
+
+      const sessionId = extractSessionIdFromFile(currentFile);
+      const updates = Array.from(pendingChanges.values());
+
+      try {
+        const response = await fetch('/api/parse/update-csv', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, csvFile: currentSessionData.csvPath, updates })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert(`Saved ${data.updatedRows} changes!`);
+          pendingChanges.clear();
+          loadParsedResults(currentFile);
+        } else {
+          alert('Failed to save: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function exportToCsv() {
+      if (!currentSessionData || !currentSessionData.posts) return;
+
+      const posts = currentSessionData.posts;
+      let csv = 'Post Index,Title,Organizer,Date,Location,Fee,Phone Numbers,Status\n';
+
+      posts.forEach(post => {
+        csv += [
+          post.postIndex,
+          `"${(post.extractedTitle || '').replace(/"/g, '""')}"`,
+          `"${(post.extractedOrganizer || '').replace(/"/g, '""')}"`,
+          post.extractedDate || '',
+          `"${(post.extractedLocation || '').replace(/"/g, '""')}"`,
+          `"${(post.registrationFee || '').replace(/"/g, '""')}"`,
+          `"${(post.phoneNumbers || '').replace(/"/g, '""')}"`,
+          post.parseStatus || 'pending'
+        ].join(',') + '\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `parsed-${extractSessionIdFromFile(currentFile)}-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function viewCaption(postIdx) {
+      const post = currentSessionData.posts[postIdx];
+      const caption = post.originalCaption || 'No caption available';
+      alert(`Caption for Post ${post.postIndex}:\n\n${caption.substring(0, 500)}${caption.length > 500 ? '...' : ''}`);
+    }
+
+    async function sendToVpsFromResults() {
+      const sessionId = extractSessionIdFromFile(currentFile);
+      if (!confirm('Send ' + currentSessionData.posts.length + ' parsed posts to VPS?')) return;
+
+      try {
+        const response = await fetch('/api/parse/send-to-vps', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          alert('Successfully sent ' + data.sentPosts + ' of ' + data.totalPosts + ' posts to VPS!');
+        } else {
+          alert('Failed to send: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error: ' + error.message);
+      }
+    }
+
+    function toggleCaptionPopup(postIdx, event) {
+      event.stopPropagation();
+      const popup = document.getElementById('caption-popup-' + postIdx);
+      const post = currentSessionData.posts[postIdx];
+      const button = event.target;
+
+      // Close all other popups first
+      document.querySelectorAll('.caption-popup.active').forEach(p => {
+        if (p.id !== 'caption-popup-' + postIdx) {
+          p.classList.remove('active');
+        }
+      });
+
+      if (popup.classList.contains('active')) {
+        popup.classList.remove('active');
+      } else {
+        const quality = evaluateParseQuality(post);
+        let statusClass = 'bad';
+        let statusText = 'BAD';
+
+        if (quality.score >= 4) {
+          statusClass = 'good';
+          statusText = 'GOOD';
+        } else if (quality.score >= 2) {
+          statusClass = 'partial';
+          statusText = 'PARTIAL';
+        }
+
+        const captionPreview = post.originalCaption ? post.originalCaption.substring(0, 1000) + (post.originalCaption.length > 1000 ? '...' : '') : 'No caption';
+
+        popup.innerHTML = `
+          <button class="close-popup" onclick="event.stopPropagation(); document.getElementById('caption-popup-${postIdx}').classList.remove('active');">&times;</button>
+          <h4>Post #${post.postIndex} - <span class="status-${statusClass}" style="font-size:11px;padding:2px 8px;border-radius:10px;">${statusText}</span></h4>
+          <div class="caption-text">${captionPreview}</div>
+          <div class="parse-info">${quality.details}</div>
+        `;
+        popup.classList.add('active');
+
+        // Position popup to the left of the button
+        const rect = button.getBoundingClientRect();
+        popup.style.left = (rect.left - 520) + 'px';
+        popup.style.top = rect.top + 'px';
+      }
+    }
+
+    // Close popups when clicking outside
+    document.addEventListener('click', function() {
+      document.querySelectorAll('.caption-popup.active').forEach(p => {
+        p.classList.remove('active');
+      });
+    });
+
+    // ============================================
+    // CAPTIONS REVIEW MODAL FUNCTIONS
+    // ============================================
+
+    function showCaptionsModal() {
+      if (!currentSessionData || !currentSessionData.posts) return;
+
+      const modal = document.getElementById('captionsModal');
+      const modalBody = document.getElementById('captionsModalBody');
+      modalBody.innerHTML = '';
+
+      let goodCount = 0;
+      let partialCount = 0;
+      let badCount = 0;
+
+      // Summary header
+      let summaryHtml = `
+        <div style="margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 10px;">
+          <h3 style="margin-bottom: 10px;">📊 Parse Quality Summary</h3>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div><span style="color: #4caf50;">●</span> <strong>Good:</strong> Has title + date + contacts</div>
+            <div><span style="color: #ff9800;">●</span> <strong>Partial:</strong> Missing some key info</div>
+            <div><span style="color: #f44336;">●</span> <strong>Bad:</strong> Not an event or severely incomplete</div>
+          </div>
+        </div>
+      `;
+
+      currentSessionData.posts.forEach((post) => {
+        const quality = evaluateParseQuality(post);
+        let statusClass = 'bad';
+        let statusText = 'BAD';
+
+        if (quality.score >= 4) {
+          statusClass = 'good';
+          statusText = 'GOOD';
+          goodCount++;
+        } else if (quality.score >= 2) {
+          statusClass = 'partial';
+          statusText = 'PARTIAL';
+          partialCount++;
+        } else {
+          badCount++;
+        }
+
+        const captionPreview = post.originalCaption ? post.originalCaption.substring(0, 300) + (post.originalCaption.length > 300 ? '...' : '') : 'No caption';
+
+        const captionItem = document.createElement('div');
+        captionItem.className = 'caption-item ' + statusClass;
+        captionItem.innerHTML = `
+          <div class="caption-header">
+            <span class="caption-post-index">Post #${post.postIndex}</span>
+            <span class="caption-status status-${statusClass}">${statusText}</span>
+          </div>
+          <div class="caption-text">${captionPreview}</div>
+          <div class="caption-parsed">
+            <strong>Parsed Data:</strong><br>
+            ${quality.details}
+          </div>
+        `;
+        modalBody.appendChild(captionItem);
+      });
+
+      // Add summary at the top
+      modalBody.innerHTML = summaryHtml + modalBody.innerHTML;
+
+      // Add footer with counts
+      const footerHtml = `
+        <div style="margin-top: 20px; padding: 15px; background: #f0f0f0; border-radius: 10px; text-align: center;">
+          <strong>Total:</strong> ${currentSessionData.posts.length} posts |
+          <span style="color: #4caf50;">Good: ${goodCount}</span> |
+          <span style="color: #ff9800;">Partial: ${partialCount}</span> |
+          <span style="color: #f44336;">Bad: ${badCount}</span>
+        </div>
+      `;
+      modalBody.innerHTML += footerHtml;
+
+      modal.classList.add('active');
+    }
+
+    function closeCaptionsModal() {
+      document.getElementById('captionsModal').classList.remove('active');
+    }
+
+    function evaluateParseQuality(post) {
+      let score = 0;
+      let details = [];
+
+      // Check title
+      if (post.extractedTitle && post.extractedTitle.length > 5) {
+        score += 1;
+        details.push(`✓ Title: ${post.extractedTitle}`);
+      } else {
+        details.push('✗ Title: Missing');
+      }
+
+      // Check organizer
+      if (post.extractedOrganizer && post.extractedOrganizer.length > 3) {
+        score += 1;
+        details.push(`✓ Organizer: ${post.extractedOrganizer}`);
+      } else {
+        details.push('✗ Organizer: Missing');
+      }
+
+      // Check date (should be YYYY-MM-DD format or "Not specified")
+      if (post.extractedDate && post.extractedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        score += 1;
+        details.push(`✓ Date: ${post.extractedDate}`);
+      } else {
+        details.push(`✗ Date: ${post.extractedDate || 'Missing'}`);
+      }
+
+      // Check location
+      if (post.extractedLocation && post.extractedLocation.length > 3 && post.extractedLocation !== 'Not specified') {
+        score += 0.5;
+        details.push(`✓ Location: ${post.extractedLocation}`);
+      } else {
+        details.push('✗ Location: Missing');
+      }
+
+      // Check fee
+      if (post.registrationFee && post.registrationFee.length > 3 && post.registrationFee !== 'Not specified') {
+        score += 0.5;
+        details.push(`✓ Fee: ${post.registrationFee}`);
+      } else {
+        details.push('✗ Fee: Missing');
+      }
+
+      // Check phone numbers
+      if (post.phoneNumbers && post.phoneNumbers.length > 5) {
+        score += 1;
+        details.push(`✓ Phone: ${post.phoneNumbers}`);
+      } else {
+        details.push('✗ Phone: Missing');
+      }
+
+      return { score, details: details.join('<br>') };
+    }
+
+    // Close modal when clicking outside
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('captionsModal').addEventListener('click', function(e) {
+        if (e.target === this) {
+          closeCaptionsModal();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
