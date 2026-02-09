@@ -22,7 +22,9 @@
       "Bash(python:*)",
       "Bash(copy:*)",
       "Bash(ls:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(awk:*)",
+      "Bash(find:*)"
     ]
   }
 }

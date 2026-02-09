@@ -274,24 +274,56 @@ function parsePostDate(dateStr) {
   return isNaN(date.getTime()) ? null : date;
 }
 
-// Create CSV file from scraped data for Claude parsing
-function createCsvForParsing(sessionId, jsonData) {
+// Generate a random session ID (8 hex characters)
+function generateSessionId() {
+  return Math.random().toString(16).substring(2, 10);
+}
+
+// Get next increment number for parsed files
+// MASTER_RULE.md Step 3: Incremental naming
+function getNextIncrement() {
   const parsedDir = path.join(__dirname, 'parsed');
 
-  // Get increment number for this session (count existing CSV files for this session)
-  const existingFiles = fs.readdirSync(parsedDir)
-    .filter(f => f.startsWith(`parsed-${sessionId}-`) && f.endsWith('.csv'))
-    .length;
-  const increment = existingFiles + 1;
+  // Ensure parsed directory exists
+  if (!fs.existsSync(parsedDir)) {
+    fs.mkdirSync(parsedDir, { recursive: true });
+    return 1;
+  }
 
-  const csvFilename = `parsed#${increment}-${sessionId}-${Date.now()}.csv`;
-  const csvPath = path.join(parsedDir, csvFilename);
+  // Read all files in /parsed folder
+  const files = fs.readdirSync(parsedDir);
+
+  // Extract increment numbers from filenames matching pattern: example_parsed#{N}-*.csv
+  const increments = files
+    .filter(f => f.match(/^example_parsed#(\d+)-.*\.csv$/))
+    .map(f => {
+      const match = f.match(/^example_parsed#(\d+)-/);
+      return match ? parseInt(match[1]) : 0;
+    });
+
+  // Return highest increment + 1, or 1 if no files found
+  return increments.length > 0 ? Math.max(...increments) + 1 : 1;
+}
+
+// Create CSV file from scraped data for Claude parsing
+// MASTER_RULE.md Step 2-4: Generate one parsed file per run
+function createCsvForParsing(sessionId, jsonData) {
+  const parsedDir = path.join(__dirname, 'parsed');
 
   // Ensure parsed directory exists
   if (!fs.existsSync(parsedDir)) {
     fs.mkdirSync(parsedDir, { recursive: true });
   }
 
+  // MASTER_RULE.md Step 3: Get next increment number
+  const increment = getNextIncrement();
+  const timestamp = Date.now();
+
+  // MASTER_RULE.md Step 2: Filename format: example_parsed#{increment}-{sessionId}-{timestamp}.csv
+  const csvFilename = `example_parsed#${increment}-${sessionId}-${timestamp}.csv`;
+  const csvPath = path.join(parsedDir, csvFilename);
+
+  // MASTER_RULE.md Step 2: CSV Structure
   const csvHeaders = 'session_id,json_file,post_index,post_url,original_caption,extracted_title,extracted_organizer,extracted_date,extracted_location,registration_fee,phone_numbers,contact_persons,parse_status,parse_timestamp,last_edited\n';
 
   let csvContent = csvHeaders;
@@ -299,11 +331,11 @@ function createCsvForParsing(sessionId, jsonData) {
   for (const post of jsonData.posts || []) {
     const row = [
       sessionId,
-      `scraped-${sessionId}-${jsonData.timestamp || Date.now()}.json`,
+      '', // json_file - not used in new flow, will be filled by Claude
       post.postIndex,
       post.postUrl,
-      `"${(post.caption || '').replace(/"/g, '""')}"`,
-      '', // extracted_title - to be filled by Claude
+      `"${(post.caption || '').replace(/"/g, '""').replace(/"/g, '""').replace(/'/g, "''")}"`,
+      '', // extracted_title - to be filled by Claude (Step 5)
       '', // extracted_organizer - to be filled by Claude
       post.postDate || '',
       '', // extracted_location - to be filled by Claude
@@ -318,17 +350,7 @@ function createCsvForParsing(sessionId, jsonData) {
   }
 
   fs.writeFileSync(csvPath, csvContent, 'utf8');
-
-  // Update sessions index
-  const indexPath = path.join(parsedDir, 'sessions-index.csv');
-  const jsonFilename = `scraped-${sessionId}-${jsonData.timestamp || Date.now()}.json`;
-  const indexEntry = `${sessionId},${csvFilename},${jsonData.username || ''},${jsonData.profileUrl || ''},${jsonData.timestamp || ''},${jsonData.posts?.length || 0},pending,,,0,\n`;
-
-  // Append to sessions index (create if not exists)
-  if (!fs.existsSync(indexPath)) {
-    fs.writeFileSync(indexPath, 'session_id,json_file,username,profile_url,scrape_timestamp,total_posts,parse_status,parse_timestamp,vps_sent,vps_sent_timestamp\n', 'utf8');
-  }
-  fs.appendFileSync(indexPath, indexEntry, 'utf8');
+  console.log(`✓ Parsed file created: ${csvFilename} (increment #${increment})`);
 
   return csvPath;
 }
@@ -1065,18 +1087,11 @@ async function scrapeInstagram(options) {
       }
     };
 
-    // Save to local file
-    console.log('→ Saving local backup...');
-    const backupPath = apiClient.saveToLocal(vpsSessionId || 'local', jsonData);
-    console.log('✓ Local backup saved:', backupPath);
-
-    // Create CSV for Claude parsing
-    console.log('→ Creating CSV for Claude parsing...');
-    // Extract session ID from backup path
-    const sessionMatch = backupPath.match(/scraped-([a-f0-9]+)-/);
-    const sessionId = sessionMatch ? sessionMatch[1] : vpsSessionId || 'local';
+    // MASTER_RULE.md Step 2-4: Create CSV file in /parsed folder
+    // NO JSON file created in /output during scraping (that's Step 5 - Claude's job)
+    console.log('→ Creating parsed CSV file...');
+    const sessionId = vpsSessionId || generateSessionId();
     const csvPath = createCsvForParsing(sessionId, jsonData);
-    console.log('✓ CSV created for parsing:', csvPath);
 
     // Update VPS session
     if (vpsSessionId) {
@@ -1094,10 +1109,10 @@ async function scrapeInstagram(options) {
     }
 
     console.log('\n=== Done! ===');
-    console.log('\n📋 Next Steps:');
-    console.log('1. Read the documentation: claudeasscrapingLLM.md');
-    console.log('2. Prompt Claude to read the CSV file for parsing');
-    console.log('3. View parsed results at: http://localhost:3003/parse-manager.html?file=' + path.basename(backupPath));
+    console.log('\n📋 Next Steps (MASTER_RULE.md):');
+    console.log('1. Read MASTER_RULE.md for complete workflow');
+    console.log('2. Prompt Claude: "Read MASTER_RULE.md and parse the newest file in /parsed folder"');
+    console.log('3. Claude will create JSON in /output folder');
     console.log('');
 
     return {

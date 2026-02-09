@@ -14,6 +14,12 @@ const PORT = 3003;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve main UI at root route
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'parse-manager.html'));
+});
 
 // Store active scraping sessions
 const activeSessions = new Map();
