@@ -14,6 +14,7 @@ class VPSApiClient {
     this.token = VPS_API_TOKEN;
     this.axios = axios.create({
       baseURL: this.baseURL,
+      timeout: 30000, // 30 second timeout
       headers: {
         'Content-Type': 'application/json'
       }
@@ -44,16 +45,52 @@ class VPSApiClient {
     }
   }
 
-  // Upload scraped post data to VPS
+  // Upload scraped post data to VPS (single post - deprecated, use uploadScrapedPosts instead)
   async uploadScrapedPost(sessionId, postData) {
     try {
+      console.log('[API] Uploading post to VPS...');
+      console.log('[API] Session ID:', sessionId);
+      console.log('[API] Post Index:', postData.postIndex);
+      console.log('[API] Endpoint:', `${this.baseURL}/scraper/posts`);
+
       const response = await this.axios.post('/scraper/posts', {
         sessionId,
         ...postData
       });
+      console.log('[API] Post uploaded successfully');
       return response.data;
     } catch (error) {
-      console.error('[API] Failed to upload post:', error.response?.data || error.message);
+      console.error('[API] ========== UPLOAD POST ERROR ==========');
+      console.error('[API] Error Status:', error.response?.status);
+      console.error('[API] Error Data:', error.response?.data);
+      console.error('[API] Post Index:', postData.postIndex);
+      console.error('[API] ===========================================');
+      throw error;
+    }
+  }
+
+  // Upload multiple scraped posts to VPS in bulk
+  async uploadScrapedPosts(sessionId, postsArray) {
+    try {
+      console.log('[API] Uploading posts to VPS (bulk)...');
+      console.log('[API] Session ID:', sessionId);
+      console.log('[API] Number of posts:', postsArray.length);
+      console.log('[API] Endpoint:', `${this.baseURL}/scraper/posts`);
+
+      const response = await this.axios.post('/scraper/posts', {
+        sessionId,
+        posts: postsArray
+      });
+
+      console.log('[API] ✓ Posts uploaded successfully');
+      console.log('[API] Response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('[API] ========== UPLOAD POSTS ERROR ==========');
+      console.error('[API] Error Status:', error.response?.status);
+      console.error('[API] Error Data:', error.response?.data);
+      console.error('[API] Number of posts:', postsArray.length);
+      console.error('[API] ===========================================');
       throw error;
     }
   }
@@ -76,6 +113,17 @@ class VPSApiClient {
   async createLocalSession(profileUrl, startIndex, endIndex, useAuth = false, username = null, password = null) {
     try {
       console.log('[API] Creating local scraping session on VPS...');
+      console.log('[API] Base URL:', this.baseURL);
+      console.log('[API] Endpoint: /scraper/local-session');
+      console.log('[API] Full URL:', `${this.baseURL}/scraper/local-session`);
+      console.log('[API] Has Token:', !!this.token);
+      console.log('[API] Request payload:', {
+        profileUrl,
+        startPostIndex: startIndex,
+        endPostIndex: endIndex,
+        useAuth
+      });
+
       const response = await this.axios.post('/scraper/local-session', {
         profileUrl,
         startPostIndex: startIndex,
@@ -87,7 +135,14 @@ class VPSApiClient {
       console.log('[API] Local session created:', response.data);
       return response.data;
     } catch (error) {
-      console.error('[API] Failed to create local session:', error.response?.data || error.message);
+      console.error('[API] ========== VPS ERROR DETAILS ==========');
+      console.error('[API] Error Status:', error.response?.status);
+      console.error('[API] Error URL:', error.config?.url);
+      console.error('[API] Full URL:', error.config?.baseURL + error.config?.url);
+      console.error('[API] Error Headers:', error.response?.headers);
+      console.error('[API] Error Data:', error.response?.data);
+      console.error('[API] Error Message:', error.message);
+      console.error('[API] ==========================================');
       throw error;
     }
   }

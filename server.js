@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import apiClient from './apiClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve main UI at root route
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'parse-manager.html'));
+});
+
+// Handle favicon.ico request
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end(); // No content
 });
 
 // Store active scraping sessions
@@ -435,7 +441,8 @@ app.get('/api/results', (req, res) => {
 
 // Helper: Extract session ID from filename
 function extractSessionId(filename) {
-  const match = filename.match(/scraped-([a-f0-9]+)-/);
+  // Match pattern: scraped#2-340cc8b6-1770628297209.json OR scraped#3-7d7032e0-4aa4-...-1771456661905.json
+  const match = filename.match(/^scraped#\d+-(.+)-(\d{13})\.json$/);
   return match ? match[1] : filename;
 }
 
@@ -525,68 +532,53 @@ app.post('/api/parse/create-csv', (req, res) => {
 });
 
 // Get all parse sessions
+// MASTER_RULE.md: Read JSON files from /output folder (Claude's parsed results)
 app.get('/api/parse/sessions', (req, res) => {
   try {
-    const indexPath = path.join(__dirname, 'parsed', 'sessions-index.csv');
+    const outputDir = path.join(__dirname, 'output');
 
-    if (!fs.existsSync(indexPath)) {
+    if (!fs.existsSync(outputDir)) {
       return res.json({ sessions: [] });
     }
 
-    const content = fs.readFileSync(indexPath, 'utf8');
-    const lines = content.trim().split('\n').slice(1); // Skip header
-
-    // Helper function to parse CSV line with quoted fields
-    function parseCSVLine(line) {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-
-        if (char === '"') {
-          if (inQuotes && nextChar === '"') {
-            current += '"';
-            i++;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          result.push(current);
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current);
-      return result;
-    }
-
-    const sessions = lines
-      .filter(line => line.trim())
-      .map(line => {
-        const parts = parseCSVLine(line);
-        const [
-          sessionId, jsonFile, username, profileUrl, scrapeTimestamp,
-          totalPosts, parseStatus, parseTimestamp, vpsSent, vpsSentTimestamp
-        ] = parts;
-
-        return {
-          sessionId,
-          jsonFile,
-          username,
-          profileUrl,
-          scrapeTimestamp,
-          totalPosts: parseInt(totalPosts) || 0,
-          parseStatus: parseStatus || 'pending',
-          parseTimestamp,
-          vpsSent: vpsSent === '1',
-          vpsSentTimestamp
-        };
+    // Read all JSON files in /output folder (excluding example files)
+    const files = fs.readdirSync(outputDir)
+      .filter(f => f.match(/^scraped#(\d+)-.*\.json$/))
+      .map(f => {
+        const filePath = path.join(outputDir, f);
+        const stats = fs.statSync(filePath);
+        return { filename: f, mtime: stats.mtime };
       })
-      .sort((a, b) => (b.scrapeTimestamp || '').localeCompare(a.scrapeTimestamp || ''));
+      .sort((a, b) => b.mtime - a.mtime); // Sort by modification time, newest first
+
+    const sessions = files.map(file => {
+      // Extract session ID and increment from filename
+      const match = file.filename.match(/^scraped#(\d+)-(.+)-(\d{13})\.json$/);
+      if (!match) return null;
+
+      const increment = parseInt(match[1]);
+      const sessionId = match[2];
+      const timestamp = match[3];
+      const scrapeTimestamp = new Date(parseInt(timestamp)).toISOString();
+
+      // Read JSON to get session details
+      const filePath = path.join(outputDir, file.filename);
+      const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+      return {
+        sessionId,
+        jsonFile: file.filename,
+        increment,
+        username: jsonData.username || '',
+        profileUrl: jsonData.profile_url || '',
+        scrapeTimestamp: jsonData.scrape_timestamp || scrapeTimestamp,
+        parseTimestamp: jsonData.parse_timestamp || new Date().toISOString(),
+        totalPosts: jsonData.posts?.length || 0,
+        parseStatus: 'parsed',
+        vpsSent: false,
+        vpsSentTimestamp: null
+      };
+    }).filter(s => s !== null);
 
     res.json({ sessions });
   } catch (error) {
@@ -595,7 +587,8 @@ app.get('/api/parse/sessions', (req, res) => {
   }
 });
 
-// Get CSV data for editing
+// Get parsed data for viewing/editing
+// MASTER_RULE.md: Read JSON from /output folder (Claude's parsed results)
 app.get('/api/parse/csv-data', (req, res) => {
   try {
     const { sessionId } = req.query;
@@ -604,249 +597,139 @@ app.get('/api/parse/csv-data', (req, res) => {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const parsedDir = path.join(__dirname, 'parsed');
-    const files = fs.readdirSync(parsedDir)
-      .filter(f => f.startsWith(`parsed-${sessionId}`) && f.endsWith('.csv'))
+    const outputDir = path.join(__dirname, 'output');
+    const files = fs.readdirSync(outputDir)
+      .filter(f => f.includes(`-${sessionId}-`) && f.endsWith('.json'))
       .sort()
       .reverse();
 
     if (files.length === 0) {
-      return res.status(404).json({ error: 'CSV file not found for this session' });
+      return res.status(404).json({ error: 'JSON file not found for this session' });
     }
 
-    const csvPath = path.join(parsedDir, files[0]);
-    const content = fs.readFileSync(csvPath, 'utf8');
-    const lines = content.trim().split('\n').slice(1); // Skip header
+    const jsonPath = path.join(outputDir, files[0]);
+    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-    // Helper function to parse CSV line with quoted fields
-    function parseCSVLine(line) {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-
-        if (char === '"') {
-          if (inQuotes && nextChar === '"') {
-            // Escaped quote
-            current += '"';
-            i++;
-          } else {
-            // Toggle quote mode
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          // Field separator
-          result.push(current);
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current);
-      return result;
-    }
-
-    const posts = lines.map((line, idx) => {
-      const parts = parseCSVLine(line);
-      const postIndex = parseInt(parts[2]) || idx;
-      return {
-        postIndex,
-        postUrl: parts[3] || '',
-        originalCaption: (parts[4] || '').replace(/^"|"$/g, '').replace(/""/g, '"'),
-        extractedTitle: parts[5] || '',
-        extractedOrganizer: parts[6] || '',
-        extractedDate: parts[7] || '',
-        extractedLocation: parts[8] || '',
-        registrationFee: parts[9] || '',
-        phoneNumbers: parts[10] || '',
-        contactPersons: parts[11] || '',
-        parseStatus: parts[12] || 'pending',
-        parseTimestamp: parts[13] || '',
-        lastEdited: parts[14] || ''
-      };
-    });
+    // Transform JSON data to format expected by frontend
+    const posts = (jsonData.posts || []).map(post => ({
+      postIndex: post.post_index,
+      postUrl: post.post_url,
+      originalCaption: post.original_caption || '',
+      extractedTitle: post.extracted_title || '',
+      extractedOrganizer: post.extracted_organizer || '',
+      extractedDate: post.extracted_date || '',
+      extractedLocation: post.extracted_location || '',
+      registrationFee: post.registration_fee || '',
+      phoneNumbers: Array.isArray(post.phone_numbers) ? post.phone_numbers.join(';') : (post.phone_numbers || ''),
+      contactPersons: Array.isArray(post.contact_persons) ? post.contact_persons.join(';') : (post.contact_persons || ''),
+      parseStatus: post.parse_status || 'parsed',
+      parseTimestamp: jsonData.parse_timestamp || '',
+      lastEdited: ''
+    }));
 
     res.json({
       sessionId,
       csvPath: files[0],
-      posts
+      jsonPath: files[0],
+      posts,
+      summary: jsonData.summary
     });
   } catch (error) {
-    console.error('Get CSV data error:', error.message);
+    console.error('Get JSON data error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Update CSV with edited/parsed data
+// Update JSON with edited/parsed data
 app.post('/api/parse/update-csv', (req, res) => {
   try {
-    const { sessionId, csvFile, updates } = req.body;
+    const { sessionId, csvFile: jsonFile, updates } = req.body;
 
-    if (!sessionId || !csvFile || !updates) {
-      return res.status(400).json({ error: 'sessionId, csvFile, and updates are required' });
+    if (!sessionId || !jsonFile || !updates) {
+      return res.status(400).json({ error: 'sessionId, jsonFile, and updates are required' });
     }
 
-    const csvPath = path.join(__dirname, 'parsed', csvFile);
-    if (!fs.existsSync(csvPath)) {
-      return res.status(404).json({ error: 'CSV file not found' });
+    const jsonPath = path.join(__dirname, 'output', jsonFile);
+    if (!fs.existsSync(jsonPath)) {
+      return res.status(404).json({ error: 'JSON file not found' });
     }
 
-    const content = fs.readFileSync(csvPath, 'utf8');
-    const lines = content.trim().split('\n');
-    const headers = lines[0];
-    const dataLines = lines.slice(1);
+    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-    // Apply updates
+    // Apply updates to posts
     for (const update of updates) {
-      const lineIdx = dataLines.findIndex(line => {
-        const parts = line.split(',');
-        return parseInt(parts[2]) === update.postIndex;
-      });
-
-      if (lineIdx !== -1) {
-        const parts = dataLines[lineIdx].split(',');
-        // Update specific fields
-        if (update.field === 'title') parts[5] = update.value;
-        if (update.field === 'organizer') parts[6] = update.value;
-        if (update.field === 'date') parts[7] = update.value;
-        if (update.field === 'location') parts[8] = update.value;
-        if (update.field === 'fee') parts[9] = update.value;
-        if (update.field === 'phones') parts[10] = update.value;
-        if (update.field === 'contacts') parts[11] = update.value;
+      const post = jsonData.posts.find(p => p.post_index === update.postIndex);
+      if (post) {
+        if (update.field === 'title') post.extracted_title = update.value;
+        if (update.field === 'organizer') post.extracted_organizer = update.value;
+        if (update.field === 'date') post.extracted_date = update.value;
+        if (update.field === 'location') post.extracted_location = update.value;
+        if (update.field === 'fee') post.registration_fee = update.value;
+        if (update.field === 'phones') {
+          post.phone_numbers = update.value.split(';').filter(p => p.trim());
+        }
+        if (update.field === 'contacts') {
+          post.contact_persons = update.value.split(';').filter(p => p.trim());
+        }
         if (update.field === 'status') {
-          parts[12] = update.value;
-          parts[13] = new Date().toISOString();
+          post.parse_status = update.value;
         }
         if (update.field === 'edited') {
-          parts[14] = new Date().toISOString();
+          post.last_edited = new Date().toISOString();
         }
-        dataLines[lineIdx] = parts.join(',');
       }
     }
 
-    fs.writeFileSync(csvPath, headers + '\n' + dataLines.join('\n'), 'utf8');
+    // Update parse timestamp
+    jsonData.parse_timestamp = new Date().toISOString();
+
+    // Write back to JSON file
+    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
 
     res.json({ success: true, updatedRows: updates.length });
   } catch (error) {
-    console.error('Update CSV error:', error.message);
+    console.error('Update JSON error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Mark session parse status
+// Mark session parse status (no longer needed with JSON-based flow, kept for compatibility)
 app.post('/api/parse/mark-status', (req, res) => {
-  try {
-    const { sessionId, status } = req.body;
-
-    if (!sessionId || !status) {
-      return res.status(400).json({ error: 'sessionId and status are required' });
-    }
-
-    const indexPath = path.join(__dirname, 'parsed', 'sessions-index.csv');
-    if (!fs.existsSync(indexPath)) {
-      return res.status(404).json({ error: 'Sessions index not found' });
-    }
-
-    const content = fs.readFileSync(indexPath, 'utf8');
-    const lines = content.trim().split('\n');
-    const headers = lines[0];
-    const dataLines = lines.slice(1);
-
-    let found = false;
-    const updatedLines = dataLines.map(line => {
-      const parts = line.split(',');
-      if (parts[0] === sessionId) {
-        found = true;
-        parts[6] = status; // parse_status
-        if (status === 'parsed' || status === 'done') {
-          parts[7] = new Date().toISOString(); // parse_timestamp
-        }
-      }
-      return parts.join(',');
-    });
-
-    if (!found) {
-      return res.status(404).json({ error: 'Session not found in index' });
-    }
-
-    fs.writeFileSync(indexPath, headers + '\n' + updatedLines.join('\n'), 'utf8');
-
-    res.json({ success: true, sessionId, status });
-  } catch (error) {
-    console.error('Mark status error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
+  res.json({ success: true, message: 'Status tracking moved to JSON files' });
 });
 
 // Send parsed data to VPS
 app.post('/api/parse/send-to-vps', async (req, res) => {
   try {
-    const { sessionId, csvFile } = req.body;
+    const { sessionId, csvFile: jsonFile } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    // Get CSV file
-    const parsedDir = path.join(__dirname, 'parsed');
-    let targetCsv = csvFile;
+    // Get JSON file from /output
+    const outputDir = path.join(__dirname, 'output');
+    let targetJson = jsonFile;
 
-    if (!targetCsv) {
-      const files = fs.readdirSync(parsedDir)
-        .filter(f => f.startsWith(`parsed-${sessionId}`) && f.endsWith('.csv'))
+    if (!targetJson) {
+      const files = fs.readdirSync(outputDir)
+        .filter(f => f.includes(`-${sessionId}-`) && f.endsWith('.json'))
         .sort()
         .reverse();
-      if (files.length > 0) targetCsv = files[0];
+      if (files.length > 0) targetJson = files[0];
     }
 
-    if (!targetCsv) {
-      return res.status(404).json({ error: 'No CSV file found for this session' });
+    if (!targetJson) {
+      return res.status(404).json({ error: 'No JSON file found for this session' });
     }
 
-    const csvPath = path.join(parsedDir, targetCsv);
-    const csvContent = fs.readFileSync(csvPath, 'utf8');
-    const lines = csvContent.trim().split('\n').slice(1);
+    const jsonPath = path.join(outputDir, targetJson);
+    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-    // Helper function to parse CSV line with quoted fields
-    function parseCSVLine(line) {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        const nextChar = line[i + 1];
-
-        if (char === '"') {
-          if (inQuotes && nextChar === '"') {
-            // Escaped quote
-            current += '"';
-            i++;
-          } else {
-            // Toggle quote mode
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          // Field separator
-          result.push(current);
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      result.push(current);
-      return result;
-    }
-
-    // Convert CSV rows to post data format
-    const posts = lines.map(line => {
-      const parts = parseCSVLine(line);
-      const phoneStr = parts[10] || '';
-      const phones = phoneStr.split(';').filter(p => p.trim());
-      const dateStr = parts[7] || '';
+    // Convert JSON posts to VPS format
+    const posts = (jsonData.posts || []).map(post => {
+      const phones = Array.isArray(post.phone_numbers) ? post.phone_numbers : [];
+      const dateStr = post.extracted_date || '';
 
       // Validate date format (YYYY-MM-DD or ISO date)
       let validDate = null;
@@ -855,18 +738,21 @@ app.post('/api/parse/send-to-vps', async (req, res) => {
       }
 
       return {
-        postIndex: parseInt(parts[2]) || 0,
-        postUrl: parts[3] || '',
+        postIndex: post.post_index || 0,
+        postUrl: post.post_url || '',
         postDate: validDate,
-        eventTitle: parts[5] || '',
-        eventOrganizer: parts[6] || '',
+        eventTitle: post.extracted_title || '',
+        eventOrganizer: post.extracted_organizer || '',
+        eventLocation: post.extracted_location || '',
+        registrationFee: post.registration_fee || '',
         phoneNumber1: phones[0] || null,
         phoneNumber2: phones[1] || null,
         allPhones: phones,
-        caption: (parts[4] || '').replace(/^"|"$/g, '').replace(/""/g, '"')
+        contactPersons: Array.isArray(post.contact_persons) ? post.contact_persons : [],
+        caption: post.original_caption || ''
       };
     }).filter(post => {
-      // Only send posts that have at least a title or date parsed
+      // Only send posts that have at least a title parsed
       return post.eventTitle && post.eventTitle.length > 0;
     });
 
@@ -875,85 +761,102 @@ app.post('/api/parse/send-to-vps', async (req, res) => {
         success: true,
         sessionId,
         sentPosts: 0,
-        totalPosts: lines.length,
+        totalPosts: jsonData.posts?.length || 0,
         message: 'No valid posts to send (posts must have parsed title)'
       });
     }
 
-    // Send to VPS using apiClient
-    const apiClientModule = await import('./apiClient.js');
-    const apiClient = apiClientModule.default;
+    console.log('\n========== SENDING TO VPS ==========');
+    console.log('Session ID:', sessionId);
+    console.log('JSON File:', targetJson);
+    console.log('Posts to send:', posts.length);
 
     // First, create a new session on VPS to get a valid session ID
     let vpsSessionId = sessionId;
     try {
-      // Get the original session data to find profile URL
-      const indexPath = path.join(__dirname, 'parsed', 'sessions-index.csv');
-      const indexContent = fs.readFileSync(indexPath, 'utf8');
-      const indexLines = indexContent.trim().split('\n').slice(1);
+      // Get profile URL and total posts from JSON data
+      const profileUrl = jsonData.profile_url || 'https://www.instagram.com/infolomba/';
+      const totalPosts = jsonData.posts?.length || posts.length;
 
-      const sessionData = indexLines
-        .map(line => line.split(','))
-        .find(parts => parts[0] === sessionId);
-
-      if (!sessionData) {
-        return res.status(404).json({ error: 'Session not found in index' });
-      }
-
-      const profileUrl = sessionData[3]; // profile_url is at index 3
-      const totalPosts = parseInt(sessionData[5]) || 0;
+      console.log('[VPS] Creating session on VPS...');
+      console.log('[VPS] Profile URL:', profileUrl);
+      console.log('[VPS] Total posts:', totalPosts);
 
       // Create the session on VPS
       const sessionResponse = await apiClient.createLocalSession(profileUrl, 0, totalPosts - 1, false);
-      vpsSessionId = sessionResponse.session?.id || sessionResponse.sessionId;
+
+      // VPS returns: { success: true, sessionId: "uuid", slug: "slug", status: "PENDING" }
+      vpsSessionId = sessionResponse.sessionId || sessionResponse.session?.id;
 
       if (!vpsSessionId) {
         console.error('[VPS] Failed to get session ID from response:', sessionResponse);
-        return res.status(500).json({ error: 'Failed to create session on VPS' });
+        return res.status(500).json({
+          error: 'Failed to create session on VPS',
+          details: { response: sessionResponse }
+        });
       }
 
-      console.log('[VPS] Created session, VPS Session ID:', vpsSessionId);
+      console.log('[VPS] ✓ Session created successfully');
+      console.log('[VPS] VPS Session ID:', vpsSessionId);
+      console.log('[VPS] Session Slug:', sessionResponse.slug || 'N/A');
+      console.log('[VPS] Session Status:', sessionResponse.status || 'N/A');
     } catch (err) {
-      console.error('[VPS] Failed to create session:', err.message);
-      return res.status(500).json({ error: 'Failed to create session on VPS: ' + err.message });
+      console.error('[VPS] ✗ Failed to create session');
+      console.error('[VPS] Error:', err.message);
+      console.error('[VPS] Status:', err.response?.status);
+      console.error('[VPS] Response:', err.response?.data);
+      console.error('====================================\n');
+      return res.status(500).json({
+        error: 'Failed to create session on VPS: ' + err.message,
+        details: {
+          status: err.response?.status,
+          data: err.response?.data
+        }
+      });
     }
 
-    // Upload each post using the VPS session ID
-    let successCount = 0;
-    for (const post of posts) {
-      try {
-        await apiClient.uploadScrapedPost(vpsSessionId, post);
-        successCount++;
-      } catch (err) {
-        console.error('Failed to upload post:', post.postIndex, err.message);
-      }
+    // Upload all posts to VPS in bulk
+    console.log('[VPS] Uploading posts in bulk...');
+
+    try {
+      const uploadResult = await apiClient.uploadScrapedPosts(vpsSessionId, posts);
+
+      console.log('[VPS] ✓ Upload complete');
+      console.log('[VPS] Uploaded:', uploadResult.uploaded || posts.length);
+      console.log('[VPS] Posts with phone:', uploadResult.postsWithPhone || 0);
+      console.log('====================================\n');
+
+      // Update JSON file to mark as sent to VPS
+      jsonData.vps_sent = true;
+      jsonData.vps_sent_timestamp = new Date().toISOString();
+      jsonData.vps_sent_count = uploadResult.uploaded || posts.length;
+      jsonData.vps_session_id = vpsSessionId;
+      fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf8');
+
+      res.json({
+        success: true,
+        sessionId,
+        vpsSessionId,
+        sentPosts: uploadResult.uploaded || posts.length,
+        totalPosts: posts.length,
+        postsWithPhone: uploadResult.postsWithPhone || 0,
+        sentAt: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('[VPS] ✗ Failed to upload posts in bulk');
+      console.error('[VPS] Error:', err.message);
+      console.error('[VPS] Status:', err.response?.status);
+      console.error('[VPS] Response:', err.response?.data);
+      console.error('====================================\n');
+
+      return res.status(500).json({
+        error: 'Failed to upload posts to VPS: ' + err.message,
+        details: {
+          status: err.response?.status,
+          data: err.response?.data
+        }
+      });
     }
-
-    // Update sessions index
-    const indexPath = path.join(__dirname, 'parsed', 'sessions-index.csv');
-    const content = fs.readFileSync(indexPath, 'utf8');
-    const lines2 = content.trim().split('\n');
-    const headers = lines2[0];
-    const dataLines = lines2.slice(1);
-
-    const updatedLines = dataLines.map(line => {
-      const parts = line.split(',');
-      if (parts[0] === sessionId) {
-        parts[8] = '1'; // vps_sent
-        parts[9] = new Date().toISOString(); // vps_sent_timestamp
-      }
-      return parts.join(',');
-    });
-
-    fs.writeFileSync(indexPath, headers + '\n' + updatedLines.join('\n'), 'utf8');
-
-    res.json({
-      success: true,
-      sessionId,
-      sentPosts: successCount,
-      totalPosts: posts.length,
-      sentAt: new Date().toISOString()
-    });
   } catch (error) {
     console.error('Send to VPS error:', error.message);
     res.status(500).json({ error: error.message });
@@ -969,29 +872,219 @@ app.get('/api/parse/vps-status', (req, res) => {
       return res.status(400).json({ error: 'sessionId is required' });
     }
 
-    const indexPath = path.join(__dirname, 'parsed', 'sessions-index.csv');
-    if (!fs.existsSync(indexPath)) {
+    const outputDir = path.join(__dirname, 'output');
+    const files = fs.readdirSync(outputDir)
+      .filter(f => f.includes(`-${sessionId}-`) && f.endsWith('.json'));
+
+    if (files.length === 0) {
       return res.json({ sent: false });
     }
 
-    const content = fs.readFileSync(indexPath, 'utf8');
-    const lines = content.trim().split('\n').slice(1);
-
-    const session = lines
-      .map(line => line.split(','))
-      .find(parts => parts[0] === sessionId);
-
-    if (!session) {
-      return res.json({ sent: false });
-    }
+    const jsonPath = path.join(outputDir, files[0]);
+    const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
     res.json({
-      sent: session[8] === '1',
-      sentAt: session[9] || null
+      sent: jsonData.vps_sent || false,
+      sentAt: jsonData.vps_sent_timestamp || null
     });
   } catch (error) {
     console.error('VPS status error:', error.message);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// SETTINGS API ENDPOINTS
+// ============================================
+
+// Get current configuration status
+app.get('/api/settings/config', (req, res) => {
+  try {
+    const envPath = path.join(__dirname, '.env');
+    let envContent = '';
+
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+
+    // Parse .env file
+    const envVars = {};
+    envContent.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        envVars[key] = valueParts.join('=');
+      }
+    });
+
+    res.json({
+      vpsApiUrl: envVars.VPS_API_URL || 'https://sales.webbuild.arachnova.id/api',
+      hasToken: !!(envVars.VPS_API_TOKEN && envVars.VPS_API_TOKEN.length > 0),
+      instaUsername: envVars.INSTAGRAM_USERNAME || ''
+    });
+  } catch (error) {
+    console.error('Get config error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save VPS configuration
+app.post('/api/settings/config', (req, res) => {
+  try {
+    const { vpsApiUrl, vpsApiToken } = req.body;
+    const envPath = path.join(__dirname, '.env');
+
+    // Read current .env file
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+
+    // Update or add VPS_API_URL
+    if (vpsApiUrl) {
+      if (envContent.includes('VPS_API_URL=')) {
+        envContent = envContent.replace(/VPS_API_URL=.*/, `VPS_API_URL=${vpsApiUrl}`);
+      } else {
+        envContent += `\nVPS_API_URL=${vpsApiUrl}`;
+      }
+    }
+
+    // Update or add VPS_API_TOKEN (only if provided)
+    if (vpsApiToken && vpsApiToken.trim().length > 0) {
+      if (envContent.includes('VPS_API_TOKEN=')) {
+        envContent = envContent.replace(/VPS_API_TOKEN=.*/, `VPS_API_TOKEN=${vpsApiToken.trim()}`);
+      } else {
+        envContent += `\nVPS_API_TOKEN=${vpsApiToken.trim()}`;
+      }
+    }
+
+    // Write back to .env file
+    fs.writeFileSync(envPath, envContent, 'utf8');
+
+    // Reload environment variables
+    process.env.VPS_API_URL = vpsApiUrl;
+    if (vpsApiToken && vpsApiToken.trim().length > 0) {
+      process.env.VPS_API_TOKEN = vpsApiToken.trim();
+    }
+
+    res.json({ success: true, message: 'Configuration saved successfully' });
+  } catch (error) {
+    console.error('Save config error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save Instagram credentials
+app.post('/api/settings/instagram', (req, res) => {
+  try {
+    const { instaUsername, instaPassword } = req.body;
+    const envPath = path.join(__dirname, '.env');
+
+    // Read current .env file
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+
+    // Update or add INSTAGRAM_USERNAME
+    if (instaUsername !== undefined) {
+      if (envContent.includes('INSTAGRAM_USERNAME=')) {
+        envContent = envContent.replace(/INSTAGRAM_USERNAME=.*/, `INSTAGRAM_USERNAME=${instaUsername}`);
+      } else {
+        envContent += `\nINSTAGRAM_USERNAME=${instaUsername}`;
+      }
+    }
+
+    // Update or add INSTAGRAM_PASSWORD (only if provided)
+    if (instaPassword !== undefined && instaPassword.length > 0) {
+      if (envContent.includes('INSTAGRAM_PASSWORD=')) {
+        envContent = envContent.replace(/INSTAGRAM_PASSWORD=.*/, `INSTAGRAM_PASSWORD=${instaPassword}`);
+      } else {
+        envContent += `\nINSTAGRAM_PASSWORD=${instaPassword}`;
+      }
+    }
+
+    // Write back to .env file
+    fs.writeFileSync(envPath, envContent, 'utf8');
+
+    res.json({ success: true, message: 'Instagram credentials saved successfully' });
+  } catch (error) {
+    console.error('Save Instagram config error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test VPS connection
+app.get('/api/settings/test-connection', async (req, res) => {
+  try {
+    console.log('\n========== TESTING VPS CONNECTION ==========');
+    console.log('VPS_API_URL:', process.env.VPS_API_URL);
+    console.log('VPS_API_TOKEN exists:', !!process.env.VPS_API_TOKEN);
+    console.log('VPS_API_TOKEN length:', process.env.VPS_API_TOKEN?.length || 0);
+
+    // Try to create a test session (won't actually scrape)
+    console.log('Making request to VPS...');
+
+    const testResponse = await Promise.race([
+      apiClient.createLocalSession(
+        'https://www.instagram.com/test/',
+        0,
+        1,
+        false
+      ),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout after 30s')), 30000)
+      )
+    ]);
+
+    console.log('Test response received:', testResponse);
+    console.log('===========================================\n');
+
+    // VPS returns: { success: true, sessionId: "uuid", slug: "slug", status: "PENDING" }
+    if (testResponse && testResponse.success && testResponse.sessionId) {
+      res.json({
+        success: true,
+        message: 'VPS connection successful! Session created with ID: ' + testResponse.sessionId,
+        details: {
+          endpoint: `${process.env.VPS_API_URL}/scraper/local-session`,
+          sessionId: testResponse.sessionId,
+          slug: testResponse.slug,
+          status: testResponse.status,
+          responseData: testResponse
+        }
+      });
+    } else {
+      res.json({
+        success: false,
+        error: 'VPS returned unexpected response format',
+        details: {
+          endpoint: `${process.env.VPS_API_URL}/scraper/local-session`,
+          responseData: testResponse
+        }
+      });
+    }
+  } catch (error) {
+    console.error('\n========== VPS CONNECTION ERROR ==========');
+    console.error('Error message:', error.message);
+    console.error('Error status:', error.response?.status);
+    console.error('Error response:', error.response?.data);
+    console.error('Full URL:', error.config?.baseURL + error.config?.url);
+    console.error('==========================================\n');
+
+    const errorDetails = {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      endpoint: error.config?.baseURL + error.config?.url,
+      responseData: error.response?.data,
+      hasToken: !!process.env.VPS_API_TOKEN
+    };
+
+    res.json({
+      success: false,
+      error: `${error.response?.status || 'Network'} Error: ${error.message}`,
+      details: errorDetails
+    });
   }
 });
 

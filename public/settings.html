@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Instagram Scraper</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #333;
+      margin-bottom: 5px;
+    }
+
+    .header .subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-success {
+      background: #4caf50;
+      color: white;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      margin-bottom: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .card h2 {
+      font-size: 20px;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .form-group .hint {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    .status-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-warning {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .alert {
+      padding: 15px 20px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+
+    .alert-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-left: 4px solid #4caf50;
+    }
+
+    .alert-error {
+      background: #ffebee;
+      color: #c62828;
+      border-left: 4px solid #f44336;
+    }
+
+    .alert-info {
+      background: #e3f2fd;
+      color: #1976d2;
+      border-left: 4px solid #2196f3;
+    }
+
+    .instructions {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 20px;
+    }
+
+    .instructions h3 {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .instructions ol {
+      margin-left: 20px;
+    }
+
+    .instructions li {
+      margin-bottom: 8px;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .instructions code {
+      background: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .test-result {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .test-result.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>⚙️ Settings</h1>
+        <p class="subtitle">Configure VPS API and other settings</p>
+      </div>
+      <div>
+        <a href="/" class="btn btn-secondary">← Back to Home</a>
+      </div>
+    </div>
+
+    <!-- Alert Messages -->
+    <div id="alertContainer"></div>
+
+    <!-- VPS Configuration Card -->
+    <div class="card">
+      <h2>
+        🔐 VPS API Configuration
+        <span id="tokenStatus" class="status-badge status-warning">Not Configured</span>
+      </h2>
+
+      <form id="vpsConfigForm">
+        <div class="form-group">
+          <label for="vpsApiUrl">VPS API URL</label>
+          <input
+            type="text"
+            id="vpsApiUrl"
+            name="vpsApiUrl"
+            placeholder="https://sales.webbuild.arachnova.id/api"
+            required
+          >
+          <div class="hint">The base URL of your VPS Sales CRM API</div>
+        </div>
+
+        <div class="form-group">
+          <label for="vpsApiToken">VPS API Token (JWT)</label>
+          <input
+            type="password"
+            id="vpsApiToken"
+            name="vpsApiToken"
+            placeholder="Enter your JWT token here"
+          >
+          <div class="hint">Your authentication token from the VPS CRM</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="submit" class="btn btn-primary">💾 Save Configuration</button>
+          <button type="button" class="btn btn-secondary" onclick="testConnection()">🔍 Test Connection</button>
+          <button type="button" class="btn btn-secondary" onclick="toggleTokenVisibility()">👁️ Show/Hide Token</button>
+        </div>
+      </form>
+
+      <div id="testResult" class="test-result"></div>
+
+      <div class="instructions">
+        <h3>📋 How to get your VPS JWT Token:</h3>
+        <ol>
+          <li>Open your VPS Sales CRM: <code>https://sales.webbuild.arachnova.id</code></li>
+          <li>Login to your account</li>
+          <li>Open Browser DevTools (Press <code>F12</code>)</li>
+          <li>Go to <code>Application</code> tab</li>
+          <li>In the left sidebar, expand <code>Local Storage</code></li>
+          <li>Click on your domain</li>
+          <li>Find <code>authToken</code> or <code>token</code> key</li>
+          <li>Copy the token value and paste it above</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Instagram Credentials Card -->
+    <div class="card">
+      <h2>📸 Instagram Credentials (Optional)</h2>
+
+      <form id="instagramConfigForm">
+        <div class="form-group">
+          <label for="instaUsername">Instagram Username</label>
+          <input
+            type="text"
+            id="instaUsername"
+            name="instaUsername"
+            placeholder="your_instagram_username"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="instaPassword">Instagram Password</label>
+          <input
+            type="password"
+            id="instaPassword"
+            name="instaPassword"
+            placeholder="your_instagram_password"
+          >
+          <div class="hint">⚠️ Stored locally in .env file. Never shared with anyone.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">💾 Save Instagram Credentials</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let tokenVisible = false;
+
+    // Load current configuration on page load
+    async function loadConfiguration() {
+      try {
+        const response = await fetch('/api/settings/config');
+        const data = await response.json();
+
+        if (data.vpsApiUrl) {
+          document.getElementById('vpsApiUrl').value = data.vpsApiUrl;
+        }
+
+        // Update status badge
+        if (data.hasToken) {
+          document.getElementById('tokenStatus').textContent = '✓ Configured';
+          document.getElementById('tokenStatus').className = 'status-badge status-success';
+        } else {
+          document.getElementById('tokenStatus').textContent = 'Not Configured';
+          document.getElementById('tokenStatus').className = 'status-badge status-warning';
+        }
+
+        if (data.instaUsername) {
+          document.getElementById('instaUsername').value = data.instaUsername;
+        }
+      } catch (error) {
+        console.error('Failed to load configuration:', error);
+      }
+    }
+
+    // Save VPS configuration
+    document.getElementById('vpsConfigForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = {
+        vpsApiUrl: document.getElementById('vpsApiUrl').value,
+        vpsApiToken: document.getElementById('vpsApiToken').value
+      };
+
+      try {
+        const response = await fetch('/api/settings/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('success', '✓ Configuration saved successfully! Server will reload automatically.');
+          loadConfiguration();
+
+          // Clear the token input for security
+          document.getElementById('vpsApiToken').value = '';
+        } else {
+          showAlert('error', 'Failed to save configuration: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        showAlert('error', 'Error: ' + error.message);
+      }
+    });
+
+    // Save Instagram credentials
+    document.getElementById('instagramConfigForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = {
+        instaUsername: document.getElementById('instaUsername').value,
+        instaPassword: document.getElementById('instaPassword').value
+      };
+
+      try {
+        const response = await fetch('/api/settings/instagram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showAlert('success', '✓ Instagram credentials saved successfully!');
+          document.getElementById('instaPassword').value = '';
+        } else {
+          showAlert('error', 'Failed to save credentials: ' + (data.error || 'Unknown error'));
+        }
+      } catch (error) {
+        showAlert('error', 'Error: ' + error.message);
+      }
+    });
+
+    // Test VPS connection
+    async function testConnection() {
+      const testResult = document.getElementById('testResult');
+      testResult.className = 'test-result show alert-info';
+      testResult.textContent = '🔄 Testing connection to VPS...';
+
+      try {
+        const response = await fetch('/api/settings/test-connection');
+        const data = await response.json();
+
+        if (data.success) {
+          testResult.className = 'test-result show alert-success';
+          testResult.innerHTML = `
+            <strong>✓ Connection successful!</strong><br>
+            VPS API is reachable and token is valid.<br>
+            <small style="opacity: 0.8;">Endpoint: ${data.details?.endpoint || 'N/A'}</small>
+          `;
+        } else {
+          testResult.className = 'test-result show alert-error';
+
+          let detailsHtml = '';
+          if (data.details) {
+            detailsHtml = `
+              <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.1); border-radius: 5px; font-family: monospace; font-size: 11px;">
+                <strong>Debug Information:</strong><br>
+                • Status: ${data.details.status || 'N/A'}<br>
+                • Endpoint: ${data.details.endpoint || 'N/A'}<br>
+                • Has Token: ${data.details.hasToken ? 'Yes' : 'No'}<br>
+                ${data.details.responseData ? `• Response: ${JSON.stringify(data.details.responseData).substring(0, 200)}` : ''}
+              </div>
+            `;
+          }
+
+          testResult.innerHTML = `
+            <strong>✗ Connection failed</strong><br>
+            ${data.error || 'Unknown error'}
+            ${detailsHtml}
+            <div style="margin-top: 10px; font-size: 12px;">
+              <strong>Common issues:</strong><br>
+              • 404 Error: The VPS endpoint might be incorrect or doesn't exist<br>
+              • 401/403 Error: Invalid or expired JWT token<br>
+              • Network Error: VPS is unreachable or CORS issue
+            </div>
+          `;
+        }
+      } catch (error) {
+        testResult.className = 'test-result show alert-error';
+        testResult.innerHTML = `
+          <strong>✗ Request Error</strong><br>
+          ${error.message}
+        `;
+      }
+    }
+
+    // Toggle token visibility
+    function toggleTokenVisibility() {
+      const tokenInput = document.getElementById('vpsApiToken');
+      tokenVisible = !tokenVisible;
+      tokenInput.type = tokenVisible ? 'text' : 'password';
+    }
+
+    // Show alert message
+    function showAlert(type, message) {
+      const alertContainer = document.getElementById('alertContainer');
+      const alert = document.createElement('div');
+      alert.className = `alert alert-${type}`;
+      alert.textContent = message;
+      alertContainer.appendChild(alert);
+
+      setTimeout(() => {
+        alert.remove();
+      }, 5000);
+    }
+
+    // Load configuration on page load
+    loadConfiguration();
+  </script>
+</body>
+</html>

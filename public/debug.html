@@ -199,6 +199,8 @@
 
     .browser-view {
       flex: 1;
+      min-height: 0; /* allow flex child to shrink below content size */
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -255,8 +257,8 @@
     }
 
     .screenshot-placeholder {
-      width: 960px;
-      height: 540px;
+      width: min(960px, 100%);
+      height: min(540px, 100%);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -343,6 +345,120 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* Bottom panel tabs */
+    .bottom-panel {
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      height: 260px;
+    }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid #30363d;
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #8b949e;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: color 0.2s;
+    }
+
+    .tab-btn:hover { color: #c9d1d9; }
+
+    .tab-btn.active {
+      color: #58a6ff;
+      border-bottom-color: #58a6ff;
+    }
+
+    .tab-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 15px;
+    }
+
+    /* Scraped posts table */
+    .posts-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .posts-table thead {
+      position: sticky;
+      top: 0;
+      background: #161b22;
+      z-index: 1;
+    }
+
+    .posts-table th {
+      text-align: left;
+      padding: 6px 8px;
+      color: #8b949e;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .posts-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #21262d;
+      vertical-align: top;
+      max-width: 0;
+    }
+
+    .posts-table tr:hover td { background: #21262d; }
+
+    .posts-table tr.has-phone td:first-child {
+      border-left: 2px solid #3fb950;
+    }
+
+    .posts-table .col-num  { width: 36px; color: #484f58; }
+    .posts-table .col-post { width: 80px; }
+    .posts-table .col-date { width: 90px; color: #8b949e; white-space: nowrap; }
+    .posts-table .col-phones { width: 160px; color: #3fb950; font-weight: 600; }
+    .posts-table .col-caption {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #8b949e;
+    }
+
+    .posts-table a {
+      color: #58a6ff;
+      text-decoration: none;
+      font-family: monospace;
+    }
+
+    .posts-table a:hover { text-decoration: underline; }
+
+    .posts-empty {
+      color: #484f58;
+      font-style: italic;
+      font-size: 13px;
+      padding: 20px 0;
+      text-align: center;
+    }
+
+    .posts-stats {
+      font-size: 11px;
+      color: #8b949e;
+      margin-bottom: 8px;
+    }
+
+    .posts-stats .stat-phones { color: #3fb950; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -350,6 +466,7 @@
     <h1>🐛 Debug Mode - Instagram Scraper</h1>
     <div class="header-links">
       <a href="parse-manager.html">Parse Manager</a>
+      <a href="settings.html">⚙️ Settings</a>
     </div>
   </div>
 
@@ -415,34 +532,60 @@
         </div>
       </div>
 
-      <div class="captions-panel">
-        <h3>Extracted Caption & Data</h3>
-        <div class="caption-content" id="captionContent">
-          <span class="caption-empty">Caption will appear here when scraping begins...</span>
+      <div class="bottom-panel">
+        <div class="tab-bar">
+          <button class="tab-btn active" id="tab-caption" onclick="switchTab('caption')">Current Post</button>
+          <button class="tab-btn" id="tab-posts" onclick="switchTab('posts')">Scraped Posts <span id="postsCountBadge">(0)</span></button>
         </div>
-        <div class="extracted-data" id="extractedData" style="display: none;">
-          <h4>Extracted Information</h4>
-          <div class="data-row">
-            <span class="data-label">Event Title:</span>
-            <span class="data-value" id="eventTitle">-</span>
+
+        <!-- Tab: Current post caption + extracted data -->
+        <div class="tab-panel" id="panel-caption">
+          <div class="caption-content" id="captionContent">
+            <span class="caption-empty">Caption will appear here when scraping begins...</span>
           </div>
-          <div class="data-row">
-            <span class="data-label">Organizer:</span>
-            <span class="data-value" id="organizer">-</span>
+          <div class="extracted-data" id="extractedData" style="display: none;">
+            <h4>Extracted Information</h4>
+            <div class="data-row">
+              <span class="data-label">Event Title:</span>
+              <span class="data-value" id="eventTitle">-</span>
+            </div>
+            <div class="data-row">
+              <span class="data-label">Organizer:</span>
+              <span class="data-value" id="organizer">-</span>
+            </div>
+            <div class="data-row">
+              <span class="data-label">Phone 1:</span>
+              <span class="data-value phone" id="phone1">-</span>
+            </div>
+            <div class="data-row">
+              <span class="data-label">Phone 2:</span>
+              <span class="data-value phone" id="phone2">-</span>
+            </div>
+            <div id="resultsActions" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #30363d;">
+              <button class="btn btn-primary" onclick="downloadResults('json')" style="margin-bottom: 8px;">📥 Download JSON</button>
+              <button class="btn btn-primary" onclick="downloadResults('txt')" style="margin-bottom: 8px;">📄 Download Text</button>
+              <button class="btn btn-primary" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
+            </div>
           </div>
-          <div class="data-row">
-            <span class="data-label">Phone 1:</span>
-            <span class="data-value phone" id="phone1">-</span>
-          </div>
-          <div class="data-row">
-            <span class="data-label">Phone 2:</span>
-            <span class="data-value phone" id="phone2">-</span>
-          </div>
-          <div id="resultsActions" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #30363d;">
-            <button class="btn btn-primary" onclick="downloadResults('json')" style="margin-bottom: 8px;">📥 Download JSON</button>
-            <button class="btn btn-primary" onclick="downloadResults('txt')" style="margin-bottom: 8px;">📄 Download Text</button>
-            <button class="btn btn-primary" onclick="copyToClipboard()">📋 Copy to Clipboard</button>
-          </div>
+        </div>
+
+        <!-- Tab: Live scraped posts table -->
+        <div class="tab-panel" id="panel-posts" style="display: none;">
+          <div class="posts-stats" id="postsStats">No posts scraped yet.</div>
+          <table class="posts-table">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-post">Post</th>
+                <th class="col-date">Date</th>
+                <th class="col-phones">Phones</th>
+                <th>Caption</th>
+              </tr>
+            </thead>
+            <tbody id="postsTableBody">
+              <tr><td colspan="5" class="posts-empty">Waiting for first post...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -463,7 +606,46 @@
 
     let currentSessionId = null;
     let eventSource = null;
-    let allScrapedData = []; // Store all scraped posts for multiple post scraping
+    let allScrapedData = [];
+    let postsWithPhones = 0;
+
+    function switchTab(name) {
+      document.getElementById('panel-caption').style.display = name === 'caption' ? 'block' : 'none';
+      document.getElementById('panel-posts').style.display  = name === 'posts'   ? 'block' : 'none';
+      document.getElementById('tab-caption').classList.toggle('active', name === 'caption');
+      document.getElementById('tab-posts').classList.toggle('active', name === 'posts');
+    }
+
+    function addPostToTable(data) {
+      const tbody = document.getElementById('postsTableBody');
+
+      // Remove "waiting" placeholder on first post
+      if (allScrapedData.length === 1) tbody.innerHTML = '';
+
+      const hasPhone = data.allPhones && data.allPhones.length > 0;
+      const phones   = hasPhone ? data.allPhones.join(', ') : '<span style="color:#484f58">—</span>';
+      const date     = data.postDate ? new Date(data.postDate).toLocaleDateString('id-ID') : '—';
+      const caption  = (data.caption || '').replace(/</g, '&lt;').substring(0, 120);
+      const postId   = (data.postUrl || '').match(/\/p\/([^/]+)/)?.[1] || '?';
+
+      const row = document.createElement('tr');
+      if (hasPhone) row.classList.add('has-phone');
+      row.innerHTML = `
+        <td class="col-num">${allScrapedData.length}</td>
+        <td class="col-post"><a href="${data.postUrl}" target="_blank">${postId}</a></td>
+        <td class="col-date">${date}</td>
+        <td class="col-phones">${phones}</td>
+        <td class="col-caption" title="${(data.caption || '').replace(/"/g, '&quot;')}">${caption}${data.caption?.length > 120 ? '…' : ''}</td>`;
+      tbody.appendChild(row);
+      // Scroll table to bottom
+      tbody.parentElement.parentElement.scrollTop = tbody.parentElement.parentElement.scrollHeight;
+
+      // Update stats
+      if (hasPhone) postsWithPhones++;
+      document.getElementById('postsCountBadge').textContent = `(${allScrapedData.length})`;
+      document.getElementById('postsStats').innerHTML =
+        `${allScrapedData.length} posts scraped &nbsp;·&nbsp; <span class="stat-phones">${postsWithPhones} with phone</span>`;
+    }
 
     function updateStatus(active, text) {
       statusDot.className = 'status-dot' + (active ? ' active' : '');
@@ -624,8 +806,13 @@
       extractedData.style.display = 'none';
       resultsActions.style.display = 'none';
       captionContent.innerHTML = '<span class="caption-empty">Caption will appear here when scraping begins...</span>';
-      allScrapedData = []; // Reset scraped data
+      allScrapedData = [];
+      postsWithPhones = 0;
       window.scrapedData = [];
+      document.getElementById('postsTableBody').innerHTML = '<tr><td colspan="5" class="posts-empty">Waiting for first post...</td></tr>';
+      document.getElementById('postsCountBadge').textContent = '(0)';
+      document.getElementById('postsStats').textContent = 'No posts scraped yet.';
+      switchTab('caption');
 
       startBtn.disabled = true;
       startBtn.textContent = 'Starting...';
@@ -672,11 +859,11 @@
               // Store post URL for results
               window.currentPostUrl = data.data.postUrl;
             } else if (data.type === 'data') {
-              // Accumulate all scraped posts
               allScrapedData.push(data.data);
               window.scrapedData = allScrapedData;
               updateExtractedData(data.data);
               showResultsPanel(data.data);
+              addPostToTable(data.data);
               addLog(`Post ${data.data.postIndex + 1} scraped (${allScrapedData.length} total)`, 'success');
             } else if (data.type === 'complete') {
               eventSource.close();

@@ -478,6 +478,7 @@
       </div>
       <div class="actions">
         <a href="debug.html" class="btn btn-secondary">← Debug Mode</a>
+        <a href="settings.html" class="btn btn-secondary">⚙️ Settings</a>
         <button class="btn btn-secondary" onclick="loadSessions()">🔄 Refresh</button>
       </div>
     </div>
@@ -635,6 +636,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const fileParam = urlParams.get('file');
       if (fileParam) {
+        // URLSearchParams automatically decodes the parameter
         loadParsedResults(fileParam);
       } else {
         loadSessions();
@@ -787,12 +789,13 @@
     // ============================================
 
     function extractSessionIdFromFile(filename) {
-      const match = filename.match(/scraped-([a-f0-9]+)-/);
-      return match ? match[1] : filename.replace('scraped-', '').replace('.json', '');
+      // Match pattern: scraped#2-340cc8b6-1770628297209.json OR scraped#3-7d7032e0-4aa4-...-1771456661905.json
+      const match = filename.match(/^scraped#\d+-(.+)-(\d{13})\.json$/);
+      return match ? match[1] : filename.replace('scraped#', '').replace('.json', '');
     }
 
     function viewResults(jsonFile) {
-      window.location.href = '?file=' + jsonFile;
+      window.location.href = '?file=' + encodeURIComponent(jsonFile);
     }
 
     async function loadParsedResults(file) {

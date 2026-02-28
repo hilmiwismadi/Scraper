@@ -1,7 +1,6 @@
 import { Builder, By, until, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 import dotenv from 'dotenv';
-import apiClient from './apiClient.js';
 import fs from 'fs';
 import path from 'path';
 import http from 'http';
@@ -293,11 +292,11 @@ function getNextIncrement() {
   // Read all files in /parsed folder
   const files = fs.readdirSync(parsedDir);
 
-  // Extract increment numbers from filenames matching pattern: example_parsed#{N}-*.csv
+  // Extract increment numbers from filenames matching pattern: parsed#{N}-*.csv (with or without example_ prefix)
   const increments = files
-    .filter(f => f.match(/^example_parsed#(\d+)-.*\.csv$/))
+    .filter(f => f.match(/^(example_)?parsed#(\d+)-.*\.csv$/))
     .map(f => {
-      const match = f.match(/^example_parsed#(\d+)-/);
+      const match = f.match(/parsed#(\d+)-/);
       return match ? parseInt(match[1]) : 0;
     });
 
@@ -307,6 +306,46 @@ function getNextIncrement() {
 
 // Create CSV file from scraped data for Claude parsing
 // MASTER_RULE.md Step 2-4: Generate one parsed file per run
+// Initialize an empty CSV file with headers before scraping starts
+function initCsvFile(sessionId) {
+  const parsedDir = path.join(__dirname, 'parsed');
+  if (!fs.existsSync(parsedDir)) fs.mkdirSync(parsedDir, { recursive: true });
+
+  const increment = getNextIncrement();
+  const timestamp = Date.now();
+  const csvFilename = `parsed#${increment}-${sessionId}-${timestamp}.csv`;
+  const csvPath = path.join(parsedDir, csvFilename);
+
+  const headers = 'session_id,json_file,post_index,post_url,original_caption,extracted_title,extracted_organizer,extracted_date,extracted_location,registration_fee,phone_numbers,contact_persons,parse_status,parse_timestamp,last_edited\n';
+  fs.writeFileSync(csvPath, headers, 'utf8');
+  console.log(`✓ CSV file initialized: ${csvFilename} (will append incrementally)`);
+  return { csvPath, csvFilename };
+}
+
+// Append one scraped post as a row to the running CSV — called after each post
+function appendPostToCsv(csvPath, sessionId, post) {
+  const row = [
+    sessionId,
+    '',
+    post.postIndex,
+    post.postUrl,
+    `"${(post.caption || '').replace(/"/g, '""').replace(/\u201c/g, '""').replace(/'/g, "''")}"`,
+    '',
+    '',
+    post.postDate ? (post.postDate instanceof Date ? post.postDate.toISOString() : post.postDate) : '',
+    '',
+    '',
+    (post.allPhones || []).join(';'),
+    '',
+    'pending',
+    '',
+    ''
+  ].join(',') + '\n';
+  fs.appendFileSync(csvPath, row, 'utf8');
+  const phones = (post.allPhones || []).length;
+  console.log(`  💾 Saved to CSV [post ${post.postIndex}] ${phones > 0 ? '📞 ' + phones + ' phone(s)' : 'no phones'} — ${path.basename(csvPath)}`);
+}
+
 function createCsvForParsing(sessionId, jsonData) {
   const parsedDir = path.join(__dirname, 'parsed');
 
@@ -319,8 +358,8 @@ function createCsvForParsing(sessionId, jsonData) {
   const increment = getNextIncrement();
   const timestamp = Date.now();
 
-  // MASTER_RULE.md Step 2: Filename format: example_parsed#{increment}-{sessionId}-{timestamp}.csv
-  const csvFilename = `example_parsed#${increment}-${sessionId}-${timestamp}.csv`;
+  // MASTER_RULE.md Step 2: Filename format: parsed#{increment}-{sessionId}-{timestamp}.csv
+  const csvFilename = `parsed#${increment}-${sessionId}-${timestamp}.csv`;
   const csvPath = path.join(parsedDir, csvFilename);
 
   // MASTER_RULE.md Step 2: CSV Structure
@@ -337,7 +376,7 @@ function createCsvForParsing(sessionId, jsonData) {
       `"${(post.caption || '').replace(/"/g, '""').replace(/"/g, '""').replace(/'/g, "''")}"`,
       '', // extracted_title - to be filled by Claude (Step 5)
       '', // extracted_organizer - to be filled by Claude
-      post.postDate || '',
+      post.postDate ? (post.postDate instanceof Date ? post.postDate.toISOString() : post.postDate) : '',
       '', // extracted_location - to be filled by Claude
       '', // registration_fee - to be filled by Claude
       (post.allPhones || []).join(';'),
@@ -377,7 +416,6 @@ async function scrapeInstagram(options) {
   } = options;
 
   let driver = null;
-  let vpsSessionId = null;
 
   try {
     console.log('\n=== Instagram Scraper (Local) ===\n');
@@ -401,23 +439,6 @@ async function scrapeInstagram(options) {
     }
 
     console.log('Username:', instaUsername);
-
-    // Create session on VPS first
-    try {
-      const sessionData = await apiClient.createLocalSession(
-        profileUrl,
-        startIndex,
-        endIndex,
-        useAuth,
-        instaUsername,
-        instaPassword
-      );
-      vpsSessionId = sessionData.sessionId;
-      console.log('✓ VPS session created:', vpsSessionId);
-    } catch (error) {
-      console.warn('⚠ Could not create VPS session, continuing anyway...');
-      console.warn('  Error:', error.message);
-    }
 
     // Setup Chrome options
     console.log('\n→ Starting Chrome browser...');
@@ -450,6 +471,9 @@ async function scrapeInstagram(options) {
       .forBrowser('chrome')
       .setChromeOptions(chromeOptions)
       .build();
+
+    // Prevent infinite hangs: page must load within 30s, implicit wait disabled
+    await driver.manage().setTimeouts({ pageLoad: 30000, implicit: 0 });
 
     console.log('✓ Browser opened');
 
@@ -705,91 +729,79 @@ async function scrapeInstagram(options) {
       }
       console.log('✓ Profile is accessible');
 
-      // Scroll to load posts
+      // Scroll to load posts — accumulate URLs in a running Set
+      // Instagram uses virtual scrolling: old posts are removed from DOM as you scroll.
+      // Counting DOM elements gives wrong (negative) deltas. A Set fixes this.
       console.log('\n=== Loading posts by scrolling ===');
-      console.log('→ Target: need to load at least', endIndex, 'posts for range', startIndex, '-', endIndex);
+      console.log('→ Target: collect at least', endIndex, 'unique post URLs');
 
-      // Calculate scroll iterations based on how many posts we need
-      // Instagram loads about 12 posts per scroll, so calculate needed scrolls
-      const postsNeeded = endIndex;
-      const postsPerScroll = 12;
-      const scrollIterations = Math.ceil(postsNeeded / postsPerScroll) + 2; // +2 for buffer
-      console.log('→ Will scroll', scrollIterations, 'times to load at least', postsNeeded, 'posts');
+      const postsPerScroll = 6; // conservative: Instagram can load as few as 3 per scroll on slow pages
+      // Allow 3x the naive estimate + 30 buffer so slow networks don't cut off early.
+      // The loop exits as soon as enough URLs are collected (or profile ends), so extra iterations are free.
+      const scrollIterations = Math.ceil(endIndex / postsPerScroll) * 3 + 30;
+      console.log('→ Will scroll up to', scrollIterations, 'times (stops early when enough collected)');
 
-      // Scroll with detection of when no more posts are loading
-      let previousPostCount = 0;
+      const collectedUrls = new Set(); // grows monotonically — immune to virtual scroll
       let noNewPostsCount = 0;
-      const maxNoNewPosts = 5; // Stop after 5 consecutive scrolls with no new posts
+      const maxNoNewPosts = 15;
       let actualScrolls = 0;
-
-      console.log('→ Will scroll up to', scrollIterations, 'times (or until no new posts load)');
 
       for (let i = 0; i < scrollIterations; i++) {
         await driver.executeScript('window.scrollTo(0, document.body.scrollHeight)');
-        await driver.sleep(2000);
+        // Adaptive sleep: longer when Instagram is slow to render the next batch
+        const scrollSleep = noNewPostsCount > 0 ? 5000 : 3000;
+        await driver.sleep(scrollSleep);
 
-        // Check current post count
-        const currentPostElements = await driver.findElements(By.css('a[href*="/p/"]'));
-        const currentPostCount = currentPostElements.length;
+        // Harvest post links — ONLY from the target profile to exclude linked/tagged posts from other accounts
+        const prevSize = collectedUrls.size;
+        const visibleElements = await driver.findElements(By.css('a[href*="/p/"]'));
+        for (const el of visibleElements) {
+          try {
+            const href = await el.getAttribute('href');
+            if (href && href.includes('/' + username + '/p/')) collectedUrls.add(href);
+          } catch (e) { /* element went stale, skip */ }
+        }
+        const newFound = collectedUrls.size - prevSize;
 
         if ((i + 1) % 5 === 0 || i === 0) {
-          showProgress(i + 1, scrollIterations, `Scrolling... (${i + 1}/${scrollIterations}, ${currentPostCount} posts)`);
-          console.log(`  Scrolled ${i + 1} times... Found ${currentPostCount} posts so far`);
+          showProgress(i + 1, scrollIterations, `Scrolling... (${i + 1}/${scrollIterations}, ${collectedUrls.size} unique posts)`);
+          console.log(`  Scrolled ${i + 1} times... ${collectedUrls.size} unique posts collected`);
         }
 
-        // Detect if no new posts are loading
-        if (currentPostCount === previousPostCount) {
+        if (newFound === 0) {
           noNewPostsCount++;
-          console.log(`  No new posts detected (${noNewPostsCount}/${maxNoNewPosts})`);
-
+          console.log(`  No new posts (${noNewPostsCount}/${maxNoNewPosts}), total collected: ${collectedUrls.size}`);
           if (noNewPostsCount >= maxNoNewPosts) {
-            console.log(`✓ No more posts loading after ${actualScrolls + 1} scrolls`);
-            console.log(`✓ Total posts found: ${currentPostCount}`);
+            console.log(`✓ Stopping: no new posts after ${maxNoNewPosts} scrolls`);
             break;
           }
         } else {
-          noNewPostsCount = 0; // Reset counter when new posts are found
-          console.log(`  ✓ Found ${currentPostCount - previousPostCount} new posts!`);
+          noNewPostsCount = 0;
+          console.log(`  ✓ +${newFound} new posts! Total: ${collectedUrls.size}`);
         }
 
-        previousPostCount = currentPostCount;
         actualScrolls++;
 
-        // Stop if we have enough posts for the requested range
-        if (currentPostCount >= endIndex) {
-          console.log(`✓ Loaded enough posts (${currentPostCount} >= ${endIndex})`);
+        if (collectedUrls.size >= endIndex) {
+          console.log(`✓ Collected enough posts (${collectedUrls.size} >= ${endIndex})`);
           break;
         }
       }
 
       showProgress(actualScrolls, scrollIterations, 'Scrolling complete');
-      console.log(`✓ Scrolling complete (${actualScrolls} iterations)`);
+      console.log(`✓ Scrolling complete — ${collectedUrls.size} unique post URLs collected`);
 
-      // Extract post links
-      console.log('\n=== Extracting post links ===');
-      console.log('→ Finding all post links on page...');
-      const postElements = await driver.findElements(By.css('a[href*="/p/"]'));
-      const postUrls = new Set();
-
-      console.log('→ Processing', postElements.length, 'link elements...');
-      for (const element of postElements) {
-        const href = await element.getAttribute('href');
-        if (href && href.includes('/p/') && !postUrls.has(href)) {
-          postUrls.add(href);
-        }
-      }
-
-      const postsArray = Array.from(postUrls);
+      const postsArray = Array.from(collectedUrls);
       console.log('✓ Found', postsArray.length, 'unique post URLs');
 
       // Validate and adjust range
-      let adjustedStartIndex = startIndex;
+      // NOTE: adjustedStartIndex is declared in outer scope (line above) so actualIndex stays correct
       let adjustedEndIndex = endIndex;
 
       if (startIndex >= postsArray.length) {
         console.log(`⚠ Warning: Start index ${startIndex} exceeds available posts (${postsArray.length})`);
         console.log(`→ Adjusting to scrape all available posts from 0 to ${postsArray.length - 1}`);
-        adjustedStartIndex = 0;
+        adjustedStartIndex = 0;  // update outer variable — fixes post label bug
         adjustedEndIndex = postsArray.length;
       } else if (endIndex > postsArray.length) {
         console.log(`⚠ Warning: End index ${endIndex} exceeds available posts (${postsArray.length})`);
@@ -802,6 +814,11 @@ async function scrapeInstagram(options) {
 
     // Scrape each post
     console.log('\n=== Scraping posts ===\n');
+
+    // Create CSV file NOW with just headers — rows appended incrementally per post
+    // This ensures partial results are saved even if the scraper crashes mid-run
+    const sessionId = generateSessionId();
+    const { csvPath, csvFilename } = initCsvFile(sessionId);
 
     const scrapedData = [];
     let scrapedCount = 0;
@@ -818,8 +835,28 @@ async function scrapeInstagram(options) {
       showProgress(i + 1, postsToScrape.length, `Post ${actualIndex + 1}`);
 
       try {
-        await driver.get(postUrl);
+        try {
+          await driver.get(postUrl);
+        } catch (navErr) {
+          // Page load timeout (30s exceeded) — try to work with whatever was loaded
+          console.log('  ⚠ Page load timed out, attempting to continue with partial content...');
+        }
         await driver.sleep(3000);
+
+        // Detect if Instagram redirected us to login/challenge — session may be dead
+        const currentUrl = await driver.getCurrentUrl();
+        if (
+          currentUrl.includes('/login') ||
+          currentUrl.includes('/challenge') ||
+          currentUrl.includes('/accounts/suspended') ||
+          currentUrl.includes('/accounts/disabled')
+        ) {
+          console.log('⚠ Redirected to: ' + currentUrl);
+          console.log('→ Instagram session expired or account challenged. Stopping and saving progress...');
+          await captureAndSendScreenshot(driver);
+          break; // exit post loop — CSV will be saved below
+        }
+
         console.log('✓ Post page loaded');
         await captureAndSendScreenshot(driver);
 
@@ -830,42 +867,174 @@ async function scrapeInstagram(options) {
         console.log('→ Extracting caption...');
         let caption = '';
 
-        // Approach 1: Extract from Instagram's embedded JSON data
-        // Instagram embeds post data in script tags with type="application/ld+json" or window._sharedData
+        // Approach 0: Extract caption anchored to THIS post's shortcode in the page source JSON.
+        // The page source contains JSON for MANY posts (related, suggested, profile feed).
+        // Searching the whole page for "longest text" picks up wrong posts — must anchor to shortcode.
         try {
-          console.log('  Trying to extract from embedded JSON data...');
+          console.log('  Trying shortcode-anchored page source extraction...');
 
-          // Look for script tags containing JSON data
-          const scriptElements = await driver.findElements(By.tagName('script'));
-          for (const script of scriptElements) {
-            try {
-              const scriptContent = await script.getText();
-              if (scriptContent && scriptContent.includes('caption')) {
-                // Try to parse as JSON
-                const jsonMatch = scriptContent.match(/\{[\s\S]*\}/);
-                if (jsonMatch) {
-                  const jsonStr = jsonMatch[0];
-                  const jsonObj = JSON.parse(jsonStr);
+          // Shortcode is the post ID in the URL: /p/DUm-viNj2Um/ → "DUm-viNj2Um"
+          const shortcode = postUrl.match(/\/p\/([^\/\?#]+)/)?.[1];
+          console.log('  Shortcode:', shortcode);
 
-                  // Look for caption in various possible locations
-                  const captionText =
-                    jsonObj.caption?.text ||
-                    jsonObj.edge_media_to_caption?.edges?.[0]?.node?.text ||
-                    jsonObj?.caption;
+          if (shortcode) {
+            // Try multiple patterns — Instagram may store shortcode under different key names
+            const shortcodePatterns = [
+              '"shortcode":"' + shortcode + '"',  // explicit key (most reliable)
+              '"code":"' + shortcode + '"',        // alternate key
+              '"' + shortcode + '"',               // standalone value
+            ];
+            let scIdx = -1;
+            for (const pat of shortcodePatterns) {
+              scIdx = pageSource.indexOf(pat);
+              if (scIdx !== -1) {
+                console.log('  Found shortcode at index', scIdx, 'via:', pat.substring(0, 40));
+                break;
+              }
+            }
 
-                  if (captionText && captionText.length > 50) {
-                    caption = captionText;
-                    console.log('  ✓ Found caption in JSON data!');
-                    break;
+            if (scIdx !== -1) {
+              // Larger window: 2000 before + 15000 after (long captions need more room)
+              const windowStart = Math.max(0, scIdx - 2000);
+              const snippet = pageSource.substring(windowStart, scIdx + 15000);
+
+              // Pattern A: "caption":{ ... "text":"FULL CAPTION" }
+              const capKeyIdx = snippet.indexOf('"caption":');
+              if (capKeyIdx !== -1) {
+                const capSnippet = snippet.substring(capKeyIdx, capKeyIdx + 5000);
+                const textMatch = capSnippet.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                if (textMatch && textMatch[1].length > 0) {
+                  try { caption = JSON.parse('"' + textMatch[1] + '"'); }
+                  catch (e) { caption = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+                  console.log('  ✓ caption.text (' + caption.length + ' chars)');
+                }
+              }
+
+              // Pattern B: edge_media_to_caption → edges → node → text
+              if (!caption) {
+                const edgeIdx = snippet.indexOf('"edge_media_to_caption"');
+                if (edgeIdx !== -1) {
+                  const edgeSnippet = snippet.substring(edgeIdx, edgeIdx + 5000);
+                  const textMatch = edgeSnippet.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                  if (textMatch && textMatch[1].length > 0) {
+                    try { caption = JSON.parse('"' + textMatch[1] + '"'); }
+                    catch (e) { caption = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+                    console.log('  ✓ edge_media_to_caption (' + caption.length + ' chars)');
                   }
                 }
               }
-            } catch (e) {
-              // Not valid JSON or doesn't contain caption, continue
+
+              // Pattern C: first "text":"..." near shortcode
+              if (!caption) {
+                const textMatch = snippet.match(/"text"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+                if (textMatch && textMatch[1].length > 0) {
+                  try { caption = JSON.parse('"' + textMatch[1] + '"'); }
+                  catch (e) { caption = textMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+                  console.log('  ✓ first text near shortcode (' + caption.length + ' chars)');
+                }
+              }
+
+              if (!caption) console.log('  ⚠ Shortcode found but no text/caption field nearby');
+            } else {
+              console.log('  ⚠ Shortcode not found in page source — page may not be fully loaded');
             }
           }
         } catch (e) {
-          console.log('  JSON extraction failed:', e.message);
+          console.log('  Page source extraction (Approach 0) failed:', e.message);
+        }
+
+        // Approach 0b: og:description-anchored full text search.
+        // og:description gives us the start of the caption (truncated ~150 chars).
+        // Use those first chars as a fingerprint to find the FULL caption text
+        // anywhere in the page source JSON (avoids shortcode positioning issues).
+        if (!caption) {
+          try {
+            const ogRaw = pageSource.match(/<meta[^>]*property="og:description"[^>]*content="([^"]+)"/)?.[1];
+            if (ogRaw) {
+              const ogContent = ogRaw
+                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+              // og format: "N likes, M comments - username on DATE: "caption text..."
+              const colonQuoteIdx = ogContent.indexOf(': "');
+              if (colonQuoteIdx !== -1) {
+                const captionHint = ogContent.substring(colonQuoteIdx + 3).replace(/[.…"]+$/, '').trim();
+                // Take first 30 ASCII-safe chars as fingerprint (avoids emoji encoding mismatches)
+                const asciiHint = captionHint.replace(/[^\x20-\x7E]/g, '').trim().substring(0, 30);
+                if (asciiHint.length >= 8) {
+                  console.log('  Trying og:description hint search for:', JSON.stringify(asciiHint));
+                  // Scan ALL "text":"..." fields in entire page source, pick longest that contains our hint
+                  const textRegex = /"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+                  let m, bestCaption = '';
+                  while ((m = textRegex.exec(pageSource)) !== null) {
+                    let decoded;
+                    try { decoded = JSON.parse('"' + m[1] + '"'); }
+                    catch (e) { decoded = m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\'); }
+                    const decodedAscii = decoded.replace(/[^\x20-\x7E]/g, '');
+                    if (decodedAscii.includes(asciiHint) && decoded.length > bestCaption.length) {
+                      bestCaption = decoded;
+                    }
+                  }
+                  if (bestCaption.length > captionHint.length) {
+                    caption = bestCaption;
+                    console.log('  ✓ og:hint full caption (' + caption.length + ' chars)');
+                  } else if (bestCaption.length > 0) {
+                    console.log('  ⚠ og:hint found text but not longer than og:description hint');
+                  } else {
+                    console.log('  ⚠ og:hint: no matching text field found in page source');
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.log('  Approach 0b failed:', e.message);
+          }
+        }
+
+        // Approach 1: DOM-based extraction (fallback if page source regex missed)
+        if (!caption || caption.length < 50) {
+          try {
+            console.log('  Trying DOM element extraction...');
+
+            // Click "more" / "...more" button to expand truncated caption
+            try {
+              const allButtons = await driver.findElements(
+                By.xpath("//article//button | //article//span[@role='button'] | //*[@aria-label='More options']")
+              );
+              for (const btn of allButtons) {
+                const btnText = await btn.getText();
+                if (btnText && /^more$/i.test(btnText.trim())) {
+                  await btn.click();
+                  await driver.sleep(1000);
+                  console.log('  ✓ Clicked "more" to expand caption');
+                  break;
+                }
+              }
+            } catch (e) { /* no "more" button — caption already fully visible */ }
+
+            // Try multiple selectors for caption element (pick longest result)
+            const captionSelectors = [
+              'article h1 span[dir="auto"]',
+              'article span[dir="auto"]',
+              'div[dir="auto"]',
+              'h1[dir="auto"]',
+            ];
+            let longest = '';
+            for (const selector of captionSelectors) {
+              try {
+                const elements = await driver.findElements(By.css(selector));
+                for (const el of elements) {
+                  const t = await el.getText();
+                  if (t && t.length > longest.length) longest = t;
+                }
+              } catch (e) {}
+            }
+            if (longest.length > 50) {
+              caption = longest;
+              console.log('  ✓ Got caption from DOM element (' + caption.length + ' chars)');
+            }
+          } catch (e) {
+            console.log('  DOM element extraction failed:', e.message);
+          }
         }
 
         // Approach 2: If JSON didn't work, try getting text from the article directly
@@ -1033,20 +1202,11 @@ async function scrapeInstagram(options) {
         };
 
         scrapedData.push(postData);
+        appendPostToCsv(csvPath, sessionId, postData); // incremental save — survives crashes
 
         // Broadcast data to debug interface
         await broadcastDebugData('caption', { caption, postUrl });
         await broadcastDebugData('data', postData);
-
-        console.log('→ Saving to VPS...');
-        if (vpsSessionId) {
-          try {
-            await apiClient.uploadScrapedPost(vpsSessionId, postData);
-            console.log('✓ Saved to VPS');
-          } catch (uploadError) {
-            console.warn('⚠ VPS upload failed:', uploadError.message);
-          }
-        }
 
         scrapedCount++;
         if (allPhones.length > 0) {
@@ -1087,26 +1247,8 @@ async function scrapeInstagram(options) {
       }
     };
 
-    // MASTER_RULE.md Step 2-4: Create CSV file in /parsed folder
-    // NO JSON file created in /output during scraping (that's Step 5 - Claude's job)
-    console.log('→ Creating parsed CSV file...');
-    const sessionId = vpsSessionId || generateSessionId();
-    const csvPath = createCsvForParsing(sessionId, jsonData);
-
-    // Update VPS session
-    if (vpsSessionId) {
-      console.log('→ Updating VPS session...');
-      try {
-        await apiClient.updateSessionStatus(vpsSessionId, 'COMPLETED', {
-          totalPosts: postsToScrape.length,
-          successfulPosts: scrapedCount,
-          postsWithPhone: phoneCount
-        });
-        console.log('✓ VPS session updated');
-      } catch (error) {
-        console.warn('⚠ Could not update VPS session:', error.message);
-      }
-    }
+    // CSV was already written incrementally — just report completion
+    console.log(`✓ CSV saved: ${csvFilename} (${scrapedCount} posts)`);
 
     console.log('\n=== Done! ===');
     console.log('\n📋 Next Steps (MASTER_RULE.md):');
@@ -1116,7 +1258,7 @@ async function scrapeInstagram(options) {
     console.log('');
 
     return {
-      sessionId: vpsSessionId,
+      sessionId,
       posts: scrapedData,
       summary: {
         total: scrapedCount,
@@ -1125,13 +1267,6 @@ async function scrapeInstagram(options) {
     };
   } catch (error) {
     console.error('\n✗ Error:', error.message);
-    if (vpsSessionId) {
-      try {
-        await apiClient.updateSessionStatus(vpsSessionId, 'FAILED', {
-          errorMessage: error.message
-        });
-      } catch (e) {}
-    }
     throw error;
   } finally {
     if (driver) {
