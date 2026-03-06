@@ -262,27 +262,8 @@ async function main() {
         await driver.sleep(500);
       }
 
-      // Save progress every 5 posts
-      if ((i + 1) % 5 === 0) {
-        console.log('');
-        console.log(`💾 Saving progress...`);
-
-        // Create CSV with posts scraped so far
-        const csvContent = generateCSV(scrapedPosts);
-
-        // Save to file
-        const increment = getNextIncrement();
-        const csvFilename = `parsed#${increment}-${sessionId}-${timestamp}.csv`;
-        const csvPath = PARSED_DIR + '\\' + csvFilename;
-
-        try {
-          fs.writeFileSync(csvPath, csvContent, 'utf8');
-          console.log(`✓ Progress saved to: ${csvPath}`);
-          console.log(`  Posts: ${scrapedPosts.length}`);
-        } catch (e) {
-          console.log(`   ⚠ Could not save progress: ${e.message}`);
-        }
-      }
+      // Small delay between posts
+      await driver.sleep(500);
     }
 
     console.log('');
