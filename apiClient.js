@@ -77,6 +77,11 @@ class VPSApiClient {
       console.log('[API] Number of posts:', postsArray.length);
       console.log('[API] Endpoint:', `${this.baseURL}/scraper/posts`);
 
+      // Log each post's phone numbers
+      postsArray.forEach((post, idx) => {
+        console.log(`[API] Post ${idx}: "${post.eventTitle}" | Phone1: "${post.phoneNumber1}" | Phone2: "${post.phoneNumber2}" | AllPhones:`, post.allPhones);
+      });
+
       const response = await this.axios.post('/scraper/posts', {
         sessionId,
         posts: postsArray

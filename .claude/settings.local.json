@@ -24,7 +24,11 @@
       "Bash(ls:*)",
       "Bash(curl:*)",
       "Bash(awk:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(INSTAGRAM_USERNAME=\"hilmekkkk\" INSTAGRAM_PASSWORD=\"wismadi4z11\" node:*)",
+      "Bash(start chrome:*)",
+      "Bash(dir D:\\\\Hilmi\\\\Coding\\\\WebScraper:*)",
+      "Bash(mv:*)"
     ]
   }
 }

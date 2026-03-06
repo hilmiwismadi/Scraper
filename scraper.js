@@ -733,23 +733,36 @@ async function scrapeInstagram(options) {
       // Instagram uses virtual scrolling: old posts are removed from DOM as you scroll.
       // Counting DOM elements gives wrong (negative) deltas. A Set fixes this.
       console.log('\n=== Loading posts by scrolling ===');
+      console.log('→ Requested range: index', startIndex, 'to', endIndex);
+
+      // Calculate how many posts we need to collect
+      const postsNeeded = endIndex - startIndex;
+      console.log('→ Need to collect at least', postsNeeded, 'posts starting from index', startIndex);
       console.log('→ Target: collect at least', endIndex, 'unique post URLs');
 
       const postsPerScroll = 6; // conservative: Instagram can load as few as 3 per scroll on slow pages
-      // Allow 3x the naive estimate + 30 buffer so slow networks don't cut off early.
-      // The loop exits as soon as enough URLs are collected (or profile ends), so extra iterations are free.
-      const scrollIterations = Math.ceil(endIndex / postsPerScroll) * 3 + 30;
+      // For deep scrolling (index > 100), we need MUCH more iterations
+      // Instagram profile feed typically only shows last 50-100 posts
+      const isDeepScroll = startIndex > 50;
+      const scrollMultiplier = isDeepScroll ? 10 : 3;
+      const scrollIterations = Math.ceil(endIndex / postsPerScroll) * scrollMultiplier + 50;
       console.log('→ Will scroll up to', scrollIterations, 'times (stops early when enough collected)');
+      if (isDeepScroll) {
+        console.log('⚠ Deep scroll mode: requesting posts from index', startIndex);
+        console.log('  Note: Instagram profile feed may only show 50-100 recent posts');
+        console.log('  Will attempt maximum scrolling to reach older posts...');
+      }
 
       const collectedUrls = new Set(); // grows monotonically — immune to virtual scroll
       let noNewPostsCount = 0;
-      const maxNoNewPosts = 15;
+      const maxNoNewPosts = isDeepScroll ? 50 : 15; // More patience for deep scrolls
       let actualScrolls = 0;
+      let consecutiveEmptyScrolls = 0;
 
       for (let i = 0; i < scrollIterations; i++) {
         await driver.executeScript('window.scrollTo(0, document.body.scrollHeight)');
         // Adaptive sleep: longer when Instagram is slow to render the next batch
-        const scrollSleep = noNewPostsCount > 0 ? 5000 : 3000;
+        const scrollSleep = noNewPostsCount > 10 ? 5000 : 3000;
         await driver.sleep(scrollSleep);
 
         // Harvest post links — ONLY from the target profile to exclude linked/tagged posts from other accounts
@@ -770,46 +783,70 @@ async function scrapeInstagram(options) {
 
         if (newFound === 0) {
           noNewPostsCount++;
+          consecutiveEmptyScrolls++;
           console.log(`  No new posts (${noNewPostsCount}/${maxNoNewPosts}), total collected: ${collectedUrls.size}`);
+          // For deep scroll, be more patient before giving up
           if (noNewPostsCount >= maxNoNewPosts) {
-            console.log(`✓ Stopping: no new posts after ${maxNoNewPosts} scrolls`);
+            console.log(`✓ Stopping: no new posts after ${maxNoNewPosts} consecutive scrolls`);
+            console.log(`  This may be the limit of Instagram's profile feed (~${collectedUrls.size} posts)`);
             break;
           }
         } else {
           noNewPostsCount = 0;
+          consecutiveEmptyScrolls = 0;
           console.log(`  ✓ +${newFound} new posts! Total: ${collectedUrls.size}`);
         }
 
         actualScrolls++;
 
+        // Only stop if we have enough posts AND we're past the start index
         if (collectedUrls.size >= endIndex) {
           console.log(`✓ Collected enough posts (${collectedUrls.size} >= ${endIndex})`);
           break;
         }
+
+        // For deep scroll, don't exit early - keep trying
+        // Instagram may have limits on profile feed depth
       }
 
       showProgress(actualScrolls, scrollIterations, 'Scrolling complete');
       console.log(`✓ Scrolling complete — ${collectedUrls.size} unique post URLs collected`);
 
-      const postsArray = Array.from(collectedUrls);
+      // Convert Set to Array and reverse so index 0 = OLDEST post, index N = NEWEST post
+      // Instagram feed shows newest first, so reversing makes index 0 the oldest
+      let postsArray = Array.from(collectedUrls).reverse();
       console.log('✓ Found', postsArray.length, 'unique post URLs');
+      console.log('  Array order: index 0 = OLDEST post, index', postsArray.length - 1, '= NEWEST post');
 
       // Validate and adjust range
       // NOTE: adjustedStartIndex is declared in outer scope (line above) so actualIndex stays correct
       let adjustedEndIndex = endIndex;
 
       if (startIndex >= postsArray.length) {
-        console.log(`⚠ Warning: Start index ${startIndex} exceeds available posts (${postsArray.length})`);
-        console.log(`→ Adjusting to scrape all available posts from 0 to ${postsArray.length - 1}`);
+        console.log(`\n⚠⚠⚠ WARNING: Start index ${startIndex} exceeds available posts (${postsArray.length})`);
+        console.log(`→ Instagram profile feed limit reached! Only ${postsArray.length} posts are accessible.`);
+        console.log(`→ This is a limitation of Instagram's web interface, not the scraper.`);
+        console.log(`→ Options:`);
+        console.log(`   1. Use a smaller start index (0-${postsArray.length - 1})`);
+        console.log(`   2. Scrape multiple smaller batches over time`);
+        console.log(`   3. Use Instagram API (requires official access)`);
+        console.log(`→ Adjusting to scrape all available posts from 0 to ${postsArray.length - 1}\n`);
         adjustedStartIndex = 0;  // update outer variable — fixes post label bug
         adjustedEndIndex = postsArray.length;
       } else if (endIndex > postsArray.length) {
         console.log(`⚠ Warning: End index ${endIndex} exceeds available posts (${postsArray.length})`);
+        console.log(`→ Will scrape posts ${startIndex} to ${postsArray.length - 1} (${postsArray.length - startIndex} posts)`);
         adjustedEndIndex = postsArray.length;
       }
 
       postsToScrape = postsArray.slice(adjustedStartIndex, Math.min(adjustedEndIndex, postsArray.length));
       console.log('→ Will scrape posts', adjustedStartIndex, 'to', Math.min(adjustedEndIndex, postsArray.length) - 1, '(' + postsToScrape.length + ' posts)');
+
+      // Show estimated date range for the requested indices
+      if (postsArray.length > 10 && isDeepScroll) {
+        console.log('  Note: Index', adjustedStartIndex, 'should be approximately', Math.round(adjustedStartIndex / 3), 'months ago');
+        console.log  ('        (assuming ~3 posts per week average posting frequency)');
+      }
     }
 
     // Scrape each post

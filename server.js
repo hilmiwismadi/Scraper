@@ -726,34 +726,94 @@ app.post('/api/parse/send-to-vps', async (req, res) => {
     const jsonPath = path.join(outputDir, targetJson);
     const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-    // Convert JSON posts to VPS format
+    // Convert JSON posts to VPS format with sanitization
     const posts = (jsonData.posts || []).map(post => {
-      const phones = Array.isArray(post.phone_numbers) ? post.phone_numbers : [];
-      const dateStr = post.extracted_date || '';
+      let phones = Array.isArray(post.phone_numbers) ? post.phone_numbers : [];
+      let dateStr = post.extracted_date || '';
+      let title = post.extracted_title || '';
+      let organizer = post.extracted_organizer || '';
+      let location = post.extracted_location || '';
+      let fee = post.registration_fee || '';
+      let caption = post.original_caption || '';
+      let contactPersons = Array.isArray(post.contact_persons) ? post.contact_persons : [];
 
-      // Validate date format (YYYY-MM-DD or ISO date)
-      let validDate = null;
-      if (dateStr && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
-        validDate = dateStr;
-      }
+      // SANITIZATION: Remove special unicode characters from mathematical alphabets
+      // This converts characters like 𝐂𝐎𝐌𝐌𝐔𝐍𝐈𝐏𝐇𝐎𝐑𝐈𝐀 to COMMUNIPHORIA
+      const normalizeUnicode = (str) => {
+        if (!str) return '';
+        return str.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\u1d400-\u1d7ff\u2070-\u209f\u2100-\u214f]/g, (char) => {
+            // Mathematical bold, italic, etc. - map to regular ASCII
+            const map = {
+              // Mathematical bold digits
+              '𝟎': '0', '𝟏': '1', '𝟐': '2', '𝟑': '3', '𝟒': '4', '𝟓': '5', '𝟔': '6', '𝟕': '7', '𝟖': '8', '𝟗': '9',
+              // Mathematical bold letters (simplified mapping)
+              '𝐀': 'A', '𝐁': 'B', '𝐂': 'C', '𝐃': 'D', '𝐄': 'E', '𝐅': 'F', '𝐆': 'G', '𝐇': 'H', '𝐈': 'I', '𝐉': 'J', '𝐊': 'K', '𝐋': 'L', '𝐌': 'M', '𝐍': 'N', '𝐎': 'O', '𝐏': 'P', '𝐐': 'Q', '𝐑': 'R', '𝐒': 'S', '𝐓': 'T', '𝐔': 'U', '𝐕': 'V', '𝐖': 'W', '𝐗': 'X', '𝐘': 'Y', '𝐙': 'Z',
+              '𝐚': 'a', '𝐛': 'b', '𝐜': 'c', '𝐝': 'd', '𝐞': 'e', '𝐟': 'f', '𝐠': 'g', '𝐡': 'h', '𝐢': 'i', '𝐣': 'j', '𝐤': 'k', '𝐥': 'l', '𝐦': 'm', '𝐧': 'n', '𝐨': 'o', '𝐩': 'p', '𝐪': 'q', '𝐫': 'r', '𝐬': 's', '𝐭': 't', '𝐮': 'u', '𝐯': 'v', '𝐰': 'w', '𝐱': 'x', '𝐲': 'y', '𝐳': 'z',
+            };
+            return map[char] || char;
+          });
+      };
+
+      // Normalize phone numbers to ensure consistent format (start with 0 for Indonesia)
+      const normalizePhone = (phone) => {
+        if (!phone) return null;
+        let p = phone.toString().trim().replace(/\D/g, ''); // Remove non-digits
+        if (p.startsWith('62') && p.length > 10) {
+          p = '0' + p.substring(2); // Convert 62... to 0...
+        }
+        return p.length >= 10 ? p : null;
+      };
+
+      // Extract date and clean it (take only YYYY-MM-DD part)
+      const extractDate = (dateStr) => {
+        if (!dateStr || dateStr === 'N/A' || dateStr === 'Not specified') return null;
+        const match = dateStr.match(/^(\d{4}-\d{2}-\d{2})/);
+        return match ? match[1] : null;
+      };
+
+      // Clean "Not specified" values
+      const cleanValue = (val) => {
+        if (!val || val === 'N/A' || val === 'Not specified' || val === 'Not applicable') return '';
+        return val;
+      };
+
+      // Apply normalization
+      title = normalizeUnicode(title);
+      organizer = normalizeUnicode(organizer);
+      location = normalizeUnicode(location);
+      fee = normalizeUnicode(fee);
+      caption = normalizeUnicode(caption);
+      contactPersons = contactPersons.map(cp => normalizeUnicode(cp)).filter(cp => cp);
+
+      // Normalize phones
+      phones = phones.map(p => normalizePhone(p)).filter(p => p !== null);
+      contactPersons = contactPersons.map(cp => normalizeUnicode(cp));
+
+      // Clean "Not specified" values
+      fee = cleanValue(fee);
+      location = cleanValue(location);
+
+      // Get valid date
+      let validDate = extractDate(dateStr);
 
       return {
         postIndex: post.post_index || 0,
         postUrl: post.post_url || '',
         postDate: validDate,
-        eventTitle: post.extracted_title || '',
-        eventOrganizer: post.extracted_organizer || '',
-        eventLocation: post.extracted_location || '',
-        registrationFee: post.registration_fee || '',
+        eventTitle: title,
+        eventOrganizer: organizer,
+        eventLocation: location,
+        registrationFee: fee,
         phoneNumber1: phones[0] || null,
         phoneNumber2: phones[1] || null,
         allPhones: phones,
-        contactPersons: Array.isArray(post.contact_persons) ? post.contact_persons : [],
-        caption: post.original_caption || ''
+        contactPersons: contactPersons,
+        caption: caption.substring(0, 5000) // Limit caption length to prevent overflow
       };
     }).filter(post => {
-      // Only send posts that have at least a title parsed
-      return post.eventTitle && post.eventTitle.length > 0;
+      // Only send posts that have at least a title parsed and is not "Non-Event Post"
+      return post.eventTitle && post.eventTitle.length > 0 && !post.eventTitle.includes('Non-Event Post');
     });
 
     if (posts.length === 0) {
@@ -817,6 +877,10 @@ app.post('/api/parse/send-to-vps', async (req, res) => {
 
     // Upload all posts to VPS in bulk
     console.log('[VPS] Uploading posts in bulk...');
+    console.log('[VPS] Posts being sent:');
+    posts.forEach((p, i) => {
+      console.log(`[VPS]   ${i+1}. "${p.eventTitle}" | Date: ${p.postDate} | Phone: ${p.phoneNumber1 || 'none'} | Location: ${p.eventLocation || 'none'} | Fee: ${p.registrationFee || 'none'}`);
+    });
 
     try {
       const uploadResult = await apiClient.uploadScrapedPosts(vpsSessionId, posts);
@@ -824,6 +888,7 @@ app.post('/api/parse/send-to-vps', async (req, res) => {
       console.log('[VPS] ✓ Upload complete');
       console.log('[VPS] Uploaded:', uploadResult.uploaded || posts.length);
       console.log('[VPS] Posts with phone:', uploadResult.postsWithPhone || 0);
+      console.log('[VPS] Full response:', JSON.stringify(uploadResult, null, 2));
       console.log('====================================\n');
 
       // Update JSON file to mark as sent to VPS
@@ -1085,6 +1150,284 @@ app.get('/api/settings/test-connection', async (req, res) => {
       error: `${error.response?.status || 'Network'} Error: ${error.message}`,
       details: errorDetails
     });
+  }
+});
+
+// ============================================
+// SCROLL TEST API ENDPOINTS
+// ============================================
+
+// Scroll test endpoint - Start lazy loading scroll test
+app.post('/api/scroll-test', async (req, res) => {
+  const { username, lazyCount, instaUsername, instaPassword } = req.body;
+
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  if (!instaUsername || !instaPassword) {
+    return res.status(400).json({ error: 'Instagram credentials are required' });
+  }
+
+  const targetLazyCount = parseInt(lazyCount) || 100;
+  const sessionId = 'scroll-' + Date.now().toString();
+
+  // Initialize session
+  activeSessions.set(sessionId, {
+    clients: [],
+    logs: [],
+    username,
+    lazyCount: targetLazyCount,
+    startTime: Date.now(),
+    scrollTest: true
+  });
+
+  // Send initial response
+  res.json({
+    success: true,
+    sessionId,
+    message: 'Scroll test started'
+  });
+
+  // Start scroll test in background
+  try {
+    const args = ['--username', username, '--lazy-count', String(targetLazyCount), '--session', sessionId];
+
+    const env = {
+      ...process.env,
+      INSTAGRAM_USERNAME: instaUsername || '',
+      INSTAGRAM_PASSWORD: instaPassword || ''
+    };
+
+    const scrollTest = spawn('node', ['scraper-scroll-test.js', ...args], {
+      cwd: __dirname,
+      env: env,
+      stdio: 'pipe'
+    });
+
+    let output = '';
+    let errorOutput = '';
+
+    // Process stdout line by line
+    scrollTest.stdout.on('data', (data) => {
+      const text = data.toString();
+      output += text;
+
+      // Split by lines and broadcast
+      const lines = text.split('\n');
+      lines.forEach(line => {
+        if (line.trim()) {
+          let type = 'info';
+          if (line.includes('✓') || line.includes('✓')) type = 'success';
+          else if (line.includes('✗') || line.includes('Error') || line.includes('error')) type = 'error';
+          else if (line.includes('⚠') || line.includes('Warning')) type = 'warning';
+          else if (line.includes('→')) type = 'progress';
+          else if (line.includes('===')) type = 'header';
+
+          broadcastLog(sessionId, {
+            type: 'log',
+            logType: type,
+            message: line.trim(),
+            timestamp: Date.now()
+          });
+        }
+      });
+
+      // Parse progress from output
+      const progressMatch = text.match(/\[(█+░+)]\s*(\d+)%/);
+      if (progressMatch) {
+        const percent = parseInt(progressMatch[2]);
+        broadcastLog(sessionId, {
+          type: 'progress',
+          percent,
+          timestamp: Date.now()
+        });
+      }
+    });
+
+    scrollTest.stderr.on('data', (data) => {
+      const text = data.toString();
+      errorOutput += text;
+
+      broadcastLog(sessionId, {
+        type: 'log',
+        logType: 'error',
+        message: text.trim(),
+        timestamp: Date.now()
+      });
+    });
+
+    scrollTest.on('close', (code) => {
+      broadcastLog(sessionId, {
+        type: 'complete',
+        success: code === 0,
+        code,
+        timestamp: Date.now()
+      });
+
+      // Clean up session after 5 minutes
+      setTimeout(() => {
+        activeSessions.delete(sessionId);
+      }, 300000);
+    });
+
+    // Store process reference for potential termination
+    activeSessions.get(sessionId).process = scrollTest;
+
+  } catch (error) {
+    broadcastLog(sessionId, {
+      type: 'error',
+      message: error.message,
+      timestamp: Date.now()
+    });
+  }
+});
+
+// Scroll test endpoint - Stop scroll test session
+app.post('/api/scroll-test/stop', (req, res) => {
+  const { sessionId } = req.body;
+
+  if (activeSessions.has(sessionId)) {
+    const session = activeSessions.get(sessionId);
+
+    // Kill the scroll test process if it exists
+    if (session.process) {
+      session.process.kill();
+    }
+
+    broadcastLog(sessionId, {
+      type: 'complete',
+      success: false,
+      code: 'TERMINATED',
+      timestamp: Date.now()
+    });
+
+    res.json({ success: true, message: 'Scroll test stopped' });
+  } else {
+    res.status(404).json({ error: 'Session not found' });
+  }
+});
+
+// Browser Scraper API - Save results to /parsed folder
+// This endpoint receives scraped data from browser-scraper.js and saves to /parsed
+app.post('/api/browser-scraper/save', (req, res) => {
+  try {
+    const { results } = req.body;
+
+    if (!results || !results.metadata || !results.posts) {
+      return res.status(400).json({ error: 'Invalid results format' });
+    }
+
+    const meta = results.metadata;
+    const posts = results.posts;
+
+    // Generate session ID and timestamp
+    const sessionId = 'browser-' + Date.now().toString(36);
+    const timestamp = Date.now();
+
+    // Get next increment number
+    const parsedDir = path.join(__dirname, 'parsed');
+    if (!fs.existsSync(parsedDir)) {
+      fs.mkdirSync(parsedDir, { recursive: true });
+    }
+
+    // Read existing files to determine increment
+    const files = fs.readdirSync(parsedDir);
+    const increments = files
+      .filter(f => f.match(/^(example_)?parsed#(\d+)-.*\.csv$/))
+      .map(f => {
+        const match = f.match(/parsed#(\d+)-/);
+        return match ? parseInt(match[1]) : 0;
+      });
+    const increment = increments.length > 0 ? Math.max(...increments) + 1 : 1;
+
+    // Create CSV filename
+    const csvFilename = `parsed#${increment}-${sessionId}-${timestamp}.csv`;
+    const csvPath = path.join(parsedDir, csvFilename);
+
+    // CSV headers per MASTER_RULE.md
+    const headers = 'session_id,json_file,post_index,post_url,original_caption,extracted_title,extracted_organizer,extracted_date,extracted_location,registration_fee,phone_numbers,contact_persons,parse_status,parse_timestamp,last_edited\n';
+
+    // Build CSV rows
+    const rows = posts.map(post => {
+      // Escape CSV fields
+      const escapeCsv = (str) => {
+        if (!str) return '';
+        const s = String(str).replace(/"/g, '""');
+        return `"${s}"`;
+      };
+
+      const jsonFile = `browser_scrape_${timestamp}.json`;
+      const caption = (post.caption || '').substring(0, 5000); // Limit to 5000 chars per MASTER_RULE
+      const phones = (post.phones || []).join('; ');
+      const contacts = []; // Browser scraper doesn't extract contact persons names
+      const parseStatus = post.success ? 'pending' : 'failed';
+
+      return [
+        sessionId,
+        jsonFile,
+        post.index,
+        post.url,
+        escapeCsv(caption),
+        '', // extracted_title - to be filled by Claude
+        '', // extracted_organizer - to be filled by Claude
+        post.date || '', // extracted_date - if found in caption
+        '', // extracted_location - to be filled by Claude
+        '', // registration_fee - to be filled by Claude
+        escapeCsv(phones),
+        escapeCsv(contacts.join('; ')),
+        parseStatus,
+        '', // parse_timestamp - filled when Claude parses
+        timestamp // last_edited
+      ].join(',');
+    });
+
+    // Write CSV file
+    const csvContent = headers + rows.join('\n') + '\n';
+    fs.writeFileSync(csvPath, csvContent, 'utf8');
+
+    console.log(`\n✓ Browser scraper results saved to /parsed/${csvFilename}`);
+    console.log(`  Posts: ${posts.length}`);
+    console.log(`  Profile: @${meta.targetUsername}`);
+    console.log(`  Range: ${meta.scrapeStartIndex}-${meta.scrapeEndIndex}\n`);
+
+    res.json({
+      success: true,
+      message: 'Results saved to /parsed folder',
+      filename: csvFilename,
+      path: csvPath,
+      sessionId: sessionId,
+      increment: increment,
+      postsSaved: posts.length
+    });
+
+  } catch (error) {
+    console.error('Error saving browser scraper results:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get next increment number (for browser scraper to check)
+app.get('/api/browser-scraper/increment', (req, res) => {
+  try {
+    const parsedDir = path.join(__dirname, 'parsed');
+    if (!fs.existsSync(parsedDir)) {
+      return res.json({ increment: 1 });
+    }
+
+    const files = fs.readdirSync(parsedDir);
+    const increments = files
+      .filter(f => f.match(/^(example_)?parsed#(\d+)-.*\.csv$/))
+      .map(f => {
+        const match = f.match(/parsed#(\d+)-/);
+        return match ? parseInt(match[1]) : 0;
+      });
+
+    const nextIncrement = increments.length > 0 ? Math.max(...increments) + 1 : 1;
+    res.json({ increment: nextIncrement });
+
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

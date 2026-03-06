@@ -110,9 +110,17 @@ Convert it to JSON format and save to /output folder."
 1. Read the newest valid file in `/parsed` folder
 2. Parse and interpret the caption content using LLM intelligence
 3. Extract: title, organizer, date, location, fee, contacts
-4. Normalize and clean data
+4. Normalize and clean data (**IMPORTANT: See Data Sanitization Rules below**)
 5. Convert to structured JSON format
 6. Save to `/output/example_scraped#{increment}-{sessionId}-{timestamp}.json`
+
+**Data Sanitization Rules (CRITICAL for VPS Upload):**
+- **Dates:** Use `YYYY-MM-DD` format only (e.g., `2026-03-15`). Do NOT use ranges like "2026-03-15 to 2026-03-20" or text like "2026-03-15 (Open Registration)". Extract just the first/main date.
+- **Phone Numbers:** Format as Indonesian numbers starting with `0` (e.g., `081234567890`). Convert `+62` to `0`. Remove spaces, dashes, parentheses.
+- **Special Characters:** Remove mathematical unicode characters (𝐀𝐁𝐂, 𝟏𝟐𝟑, etc.) and excessive emojis. Convert to regular ASCII.
+- **"Not specified" values:** Use empty string `""` or `"TBD"` instead of `"Not specified"`, `"N/A"`, etc.
+- **Non-Event Posts:** Mark with `parse_status: "non_event"` and `"Non-Event Post"` as title. These will be filtered out during VPS upload.
+- **Caption Length:** Limit captions to 5000 characters to prevent overflow issues.
 
 **Input:** `/parsed/example_parsed#{increment}-{sessionId}-{timestamp}.csv`
 
@@ -130,13 +138,13 @@ Convert it to JSON format and save to /output folder."
     {
       "post_index": 0,
       "post_url": "https://www.instagram.com/p/ABC123/",
-      "original_caption": "Full caption text here...",
-      "extracted_title": "Event Name",
+      "original_caption": "Clean caption text without excessive unicode or emojis...",
+      "extracted_title": "Event Name 2025",
       "extracted_organizer": "Organizer Name",
       "extracted_date": "2025-03-15",
-      "extracted_location": "Location Name",
-      "registration_fee": "Free / Rp 50000",
-      "phone_numbers": ["6281234567890", "6289876543210"],
+      "extracted_location": "Location Name or Online",
+      "registration_fee": "Rp 50000",
+      "phone_numbers": ["081234567890", "082234567890"],
       "contact_persons": ["Contact Name 1", "Contact Name 2"],
       "parse_status": "parsed"
     }
@@ -264,15 +272,21 @@ D:\Hilmi\Coding\WebScraper\
 When user says: **"Parse per MASTER_RULE.md"**
 
 1. Read `MASTER_RULE.md`
-2. List files in `/parsed` folder, find newest with pattern `example_parsed#{N}-*.csv`
+2. List files in `/parsed` folder, find newest with pattern `parsed#{N}-*.csv`
 3. Read that CSV file
 4. Parse each row's caption using LLM
-5. Create JSON structure
-6. Save to `/output/example_scraped#{N}-{sessionId}-{timestamp}.json`
-7. Confirm completion to user
+5. **CRITICAL:** Apply data sanitization:
+   - Dates: `YYYY-MM-DD` format only (no ranges, no extra text)
+   - Phones: Start with `0` (convert `+62` to `0`), remove formatting
+   - Remove unicode mathematical characters (𝐀𝐁𝐂 → ABC, 𝟏𝟐𝟑 → 123)
+   - Use `"TBD"` or `""` instead of `"Not specified"`/`"N/A"`
+6. Create JSON structure
+7. Save to `/output/scraped#{N}-{sessionId}-{timestamp}.json` (note: `scraped#` not `example_scraped#`)
+8. Confirm completion to user
 
 When user says: **"Send to VPS"**
 
 1. Read newest file in `/output` folder
-2. POST to VPS endpoint
-3. Confirm completion
+2. Server.js will auto-sanitize data before sending (removes unicode, normalizes phones, extracts dates)
+3. Only posts with valid titles (not "Non-Event Post") will be sent
+4. Confirm completion to user

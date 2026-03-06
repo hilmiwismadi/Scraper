@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Instagram Scraper Diagnostic</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+    .section { margin-bottom: 20px; padding: 15px; background: #16213e; border-radius: 8px; }
+    h1 { color: #0f3460; }
+    h2 { color: #e94560; margin-top: 0; }
+    .key { color: #00d9ff; }
+    .value { color: #ffeb3b; word-break: break-all; }
+    .error { color: #ff5252; }
+    .success { color: #4caf50; }
+    button { background: #e94560; color: white; border: none; padding: 10px 20px; cursor: pointer; margin: 5px; }
+    button:hover { background: #ff5252; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #333; }
+    .url { max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Instagram Scraper Diagnostic Tool</h1>
+
+  <div class="section">
+    <h2>Step 1: Check LocalStorage</h2>
+    <button onclick="checkLocalStorage()">Check LocalStorage</button>
+    <div id="localStorageResults"></div>
+  </div>
+
+  <div class="section">
+    <h2>Step 2: View Collected URLs</h2>
+    <button onclick="showPostUrls()">Show Post URLs</button>
+    <div id="postUrlsResults"></div>
+  </div>
+
+  <div class="section">
+    <h2>Step 3: Run Caption Scraper</h2>
+    <p>Enter range (e.g., 0-10 or all):</p>
+    <input type="text" id="rangeInput" placeholder="0-10" style="padding: 8px; width: 200px;">
+    <button onclick="runCaptionScraper()">Scrape Captions</button>
+    <div id="scraperResults"></div>
+  </div>
+
+  <script>
+    function log(id, msg, type = 'info') {
+      const el = document.getElementById(id);
+      const color = type === 'error' ? 'error' : type === 'success' ? 'success' : 'value';
+      el.innerHTML += `<p class="${color}">${msg}</p>`;
+    }
+
+    function clear(id) {
+      document.getElementById(id).innerHTML = '';
+    }
+
+    function checkLocalStorage() {
+      clear('localStorageResults');
+
+      try {
+        const allKeys = Object.keys(localStorage);
+        const scraperKeys = allKeys.filter(k => k.startsWith('instagram_scraper_'));
+
+        if (scraperKeys.length === 0) {
+          log('localStorageResults', '❌ No Instagram scraper data found!', 'error');
+          log('localStorageResults', '   You need to run browser-scraper.js first on the Instagram tab.', 'error');
+          return;
+        }
+
+        log('localStorageResults', `✓ Found ${scraperKeys.length} scraper entries:`, 'success');
+
+        scraperKeys.forEach(key => {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            const postCount = data.allPostUrls?.length || 0;
+            const lazyCount = data.metadata?.lazyLoadingCount || 0;
+
+            log('localStorageResults', `  Key: <span class="key">${key}</span>`, 'info');
+            log('localStorageResults', `    Posts: ${postCount} | Lazy scrolls: ${lazyCount}`, 'info');
+          } catch (e) {
+            log('localStorageResults', `  Key: <span class="key">${key}</span> - Invalid JSON`, 'error');
+          }
+        });
+
+        const latestKey = localStorage.getItem('instagram_scraper_latest');
+        if (latestKey) {
+          log('localStorageResults', `\n✓ Latest key: <span class="key">${latestKey}</span>`, 'success');
+        } else {
+          log('localStorageResults', '\n⚠ No "instagram_scraper_latest" key set', 'error');
+        }
+
+      } catch (error) {
+        log('localStorageResults', `❌ Error: ${error.message}`, 'error');
+      }
+    }
+
+    function showPostUrls() {
+      clear('postUrlsResults');
+
+      try {
+        const latestKey = localStorage.getItem('instagram_scraper_latest');
+        if (!latestKey) {
+          log('postUrlsResults', '❌ No latest key found. Run Check LocalStorage first.', 'error');
+          return;
+        }
+
+        const data = JSON.parse(localStorage.getItem(latestKey));
+        const urls = data.allPostUrls || [];
+
+        if (urls.length === 0) {
+          log('postUrlsResults', '❌ No post URLs collected!', 'error');
+          log('postUrlsResults', '   Run browser-scraper.js again to scroll and collect posts.', 'error');
+          return;
+        }
+
+        log('postUrlsResults', `✓ Found ${urls.length} post URLs`, 'success');
+        log('postUrlsResults', `  First 5:`, 'info');
+
+        let html = '<table><tr><th>Index</th><th>URL</th></tr>';
+        urls.slice(0, 5).forEach((url, i) => {
+          html += `<tr><td>${i}</td><td class="url">${url}</td></tr>`;
+        });
+        html += '</table>';
+        document.getElementById('postUrlsResults').innerHTML += html;
+
+        log('postUrlsResults', `  Last 3:`, 'info');
+        urls.slice(-3).forEach((url, i) => {
+          const idx = urls.length - 3 + i;
+          log('postUrlsResults', `    [${idx}] ${url}`, 'info');
+        });
+
+      } catch (error) {
+        log('postUrlsResults', `❌ Error: ${error.message}`, 'error');
+      }
+    }
+
+    async function runCaptionScraper() {
+      clear('scraperResults');
+
+      try {
+        const latestKey = localStorage.getItem('instagram_scraper_latest');
+        if (!latestKey) {
+          log('scraperResults', '❌ No browser-scraper data found', 'error');
+          return;
+        }
+
+        const browserData = JSON.parse(localStorage.getItem(latestKey));
+        const postUrls = browserData.allPostUrls || [];
+
+        if (postUrls.length === 0) {
+          log('scraperResults', '❌ No posts to scrape', 'error');
+          return;
+        }
+
+        const rangeInput = document.getElementById('rangeInput').value;
+        let start, end;
+
+        if (rangeInput.toLowerCase() === 'all') {
+          start = 0;
+          end = postUrls.length - 1;
+        } else {
+          const match = rangeInput.match(/^(\d+)-(\d+)$/);
+          if (!match) {
+            log('scraperResults', '❌ Invalid range. Use format: 0-10 or "all"', 'error');
+            return;
+          }
+          start = parseInt(match[1]);
+          end = parseInt(match[2]);
+        }
+
+        end = Math.min(end, postUrls.length - 1);
+        const urls = postUrls.slice(start, end + 1);
+
+        log('scraperResults', `📋 Scraping ${urls.length} posts (${start}-${end})...`, 'info');
+        log('scraperResults', '⚠️ This will open Instagram posts in a popup. Allow popups for this page.', 'info');
+        log('scraperResults', '⚠️ YOU MUST BE LOGGED INTO INSTAGRAM!', 'info');
+
+        if (!confirm('This will open Instagram posts in popup windows. Continue?')) {
+          return;
+        }
+
+        const results = [];
+        const popupWidth = 600;
+        const popupHeight = 700;
+
+        for (let i = 0; i < urls.length; i++) {
+          const url = urls[i];
+          const idx = start + i;
+
+          log('scraperResults', `[${idx + 1}/${urls.length}] Scraping...`, 'info');
+
+          try {
+            // Open popup
+            const popup = window.open(url, `post_${idx}`,
+              `width=${popupWidth},height=${popupHeight},scrollbars=yes`);
+
+            if (!popup) {
+              log('scraperResults', '❌ Popup blocked. Please allow popups and try again.', 'error');
+              break;
+            }
+
+            // Wait for page to load
+            await new Promise(r => setTimeout(r, 3000));
+
+            // Try to extract caption from popup
+            let caption = '';
+            try {
+              const selectors = ['h1', 'span[dir="auto"]', 'article div span'];
+              for (const sel of selectors) {
+                const els = popup.document.querySelectorAll(sel);
+                for (const el of els) {
+                  const txt = el.innerText || el.textContent;
+                  if (txt && txt.length > 20 && !txt.includes('View all comments')) {
+                    caption = txt.trim();
+                    break;
+                  }
+                }
+                if (caption) break;
+              }
+            } catch (e) {}
+
+            // Extract date
+            const dateMatch = caption.match(/(\d{4}-\d{2}-\d{2})/);
+            const date = dateMatch ? dateMatch[1] : null;
+
+            results.push({
+              index: idx,
+              url: url,
+              date: date,
+              caption: caption
+            });
+
+            log('scraperResults', `  ✓ Date: ${date || 'N/A'} | Caption: ${caption.substring(0, 50)}...`, 'success');
+
+            popup.close();
+            await new Promise(r => setTimeout(r, 1000));
+
+          } catch (error) {
+            log('scraperResults', `  ✗ Error: ${error.message}`, 'error');
+            results.push({
+              index: idx,
+              url: url,
+              date: null,
+              caption: '',
+              error: error.message
+            });
+          }
+        }
+
+        log('scraperResults', `\n✓ Scraped ${results.length} posts!`, 'success');
+
+        // Download
+        const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `captions-${Date.now()}.json`;
+        a.click();
+
+        log('scraperResults', '✓ Downloaded: captions-[timestamp].json', 'success');
+
+      } catch (error) {
+        log('scraperResults', `❌ Error: ${error.message}`, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
