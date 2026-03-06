@@ -58,7 +58,7 @@
   }
 
   // Save to JSON
-  function saveToJson(count, urls) {
+  function saveToJson(urls) {
     const data = {
       metadata: {
         targetUsername: window.location.href.match(/instagram\.com\/([^\/]+)/)[1] || 'unknown',
@@ -138,7 +138,7 @@
       return;
     }
 
-    const count = parseInt(countInput);
+    let count = parseInt(countInput);
 
     // Validate input
     if (isNaN(count) || count <= 0) {

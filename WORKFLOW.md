@@ -41,31 +41,52 @@ node public/browser-scroller.js
 
 ## Step 2: Collect Links
 
-**Script:** `collect-post-urls.js`
+**Option A: Single Batch** (Recommended for simple use)
+
+**Script:** `console-collect-urls.js`
 
 **Location:** `D:\Hilmi\Coding\WebScraper\public\`
 
 **How to Run:**
 ```bash
-# Option A: Copy to console
+# Use browser console (RECOMMENDED - no Node.js needed)
 1. After Step 1 completes, DO NOT refresh page
-2. Paste: http://localhost:3003/collect-post-urls.js into Console
-3. Press Enter
-4. Enter number of LAST posts to collect (e.g., 50)
+2. Open: D:\Hilmi\Coding\WebScraper\public\console-collect-urls.js
+3. Copy entire script (Ctrl+A, Ctrl+C)
+4. Paste into Instagram DevTools Console and press Enter
+5. Enter number of LAST posts to collect (e.g., 50, 100, 900)
+6. JSON file downloads automatically
+```
 
-# Option B: Run directly
-node public/collect-post-urls.js
+**Option B: Two Batches with Scroll Up** (Best for collecting more posts)
+
+**Script:** `console-collect-urls-scrollup.js`
+
+**Location:** `D:\Hilmi\Coding\WebScraper\public\`
+
+**How to Run:**
+```bash
+# Automatically collects 2 batches of 47 posts (94 total)
+1. Scroll down manually to load posts (e.g., to May 2025)
+2. Open: D:\Hilmi\Coding\WebScraper\public\console-collect-urls-scrollup.js
+3. Copy entire script (Ctrl+A, Ctrl+C)
+4. Paste into Instagram DevTools Console and press Enter
+5. Two JSON files download automatically:
+   - post-urls-XXX-batch1-of-2-XXX.json (first 47)
+   - post-urls-XXX-batch2-of-2-XXX.json (next 47)
 ```
 
 **Expected Output:**
-- Prompts: "How many LAST posts?"
-- Downloads JSON file: `post-urls-infolomba-xxx.json`
-- JSON saved to: `collected_link/` folder
+- Batch 1: 47 posts from current page
+- Automatically scrolls up to load more posts
+- Batch 2: 47 posts from newly loaded posts
+- Total: 94 posts across 2 JSON files
 
 **Tips:**
-- Always use "last N posts" to scrape from newest loaded post
-- JSON file is saved to `collected_link/` folder
-- File naming: `post-urls-infolomba-{random}.json`
+- Works with any number up to posts loaded on page (can handle 900+)
+- Scroll-up version automatically loads older posts without manual scrolling
+- NO Node.js required - runs entirely in browser
+- Copy JSON files to `collected_link/` folder for Step 3
 
 ---
 
@@ -122,7 +143,8 @@ node scrape-multiple-posts.js collected_link/post-urls-infolomba-1772781417966.j
 | Step | Script | Input | Output Location |
 |------|--------|-------|----------------|
 | 1: Scroll | `browser-scroller.js` | Lazy count | Browser loads posts |
-| 2: Collect Links | `collect-post-urls.js` | Last N posts | `collected_link/*.json` |
+| 2A: Collect | `console-collect-urls.js` | Last N posts | Browser Downloads |
+| 2B: Collect 2x | `console-collect-urls-scrollup.js` | Auto 94 posts | 2x Browser Downloads |
 | 3: Scrape | `scrape-multiple-posts.js` | JSON file | `/parsed/*.csv` |
 
 ---
@@ -132,15 +154,19 @@ node scrape-multiple-posts.js collected_link/post-urls-infolomba-1772781417966.j
 ### ✅ Do This Order
 
 1. ✅ Run browser-scroller.js FIRST (load posts)
-2. ✅ Run collect-post-urls.js NEXT (collect links)
-3. ✅ Run scrape-multiple-posts.js LAST (scrape to CSV)
-4. ✅ Use Claude LLM to parse
+2. ✅ Run console-collect-urls.js OR console-collect-urls-scrollup.js NEXT
+   - Single batch: console-collect-urls.js (enter any number)
+   - Two batches: console-collect-urls-scrollup.js (auto 94 posts)
+3. ✅ Move JSON files to collected_link/ folder
+4. ✅ Run scrape-multiple-posts.js (scrape to CSV)
+5. ✅ Use Claude LLM to parse
 
 ### ❌ Don't Do This
 
 ❌ Don't run scraper scripts before collecting links
 ❌ Don't use scrape-urls-selenium.js (old buggy version)
 ❌ Don't use scrape-urls-to-csv.js (console tool - stuck issues)
+❌ Don't use collect-post-urls.js (use console-collect-urls.js instead)
 ❌ Don't use single post scripts (use multiple-posts instead)
 
 ### File Locations
@@ -148,14 +174,15 @@ node scrape-multiple-posts.js collected_link/post-urls-infolomba-1772781417966.j
 ```
 D:\Hilmi\Coding\WebScraper\
 ├── public/
-│   ├── browser-scroller.js       ← Use this FIRST
-│   ├── collect-post-urls.js      ← Use this SECOND
-│   ├── scrape-multiple-posts.js  ← Use this LAST
+│   ├── browser-scroller.js              ← Use this FIRST (browser console)
+│   ├── console-collect-urls.js          ← Use this SECOND A (single batch)
+│   ├── console-collect-urls-scrollup.js ← Use this SECOND B (2 batches, scroll up)
 │   └── (other tools...)
-├── collected_link/              ← JSON files stored here
-├── parsed/                   ← CSV files saved here
-├── output/                   ← Claude LLM outputs here
-└── scrape-multiple-posts.js    ← Also in root (for convenience)
+├── console-collect-urls.js             ← Also in root (same as public/)
+├── scrape-multiple-posts.js             ← Use this THIRD (Node.js)
+├── collected_link/                      ← Copy JSON files here
+├── parsed/                              ← CSV files saved here
+└── output/                              ← Claude LLM outputs here
 ```
 
 ---

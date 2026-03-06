@@ -70,7 +70,7 @@
   }
 
   // Save to JSON
-  function saveToJson(count, startIndex, urls) {
+  function saveToJson(urls) {
     const data = {
       metadata: {
         targetUsername: targetUsername,
@@ -173,7 +173,7 @@
       return;
     }
 
-    const count = parseInt(countInput);
+    let count = parseInt(countInput);
 
     // Validate input
     if (isNaN(count) || count <= 0) {
