@@ -1,295 +1,272 @@
 /**
- * Console URL Collector - Scroll Up Version (2 Batches)
+ * Console URL Collector - Fixed Version
  *
- * This script runs in Instagram browser console
- * Collects TWO batches of 47 URLs each (94 total)
- * - Batch 1: Downloads 47 posts from current page
- * - Scrolls up to load more posts
- * - Batch 2: Downloads another 47 posts
- *
- * NO imports - just uses vanilla JavaScript
+ * FIXES:
+ * 1. Uses a global seen set to track already-collected post IDs across all batches
+ * 2. Scrolls DOWN (not up) to load older posts on Instagram
+ * 3. Collects only NEW posts each batch - no index drift bug
+ * 4. Keeps scrolling until it finds enough new posts for the next batch
+ * 5. Will save as many batches as user requests without stopping early
  *
  * INSTRUCTIONS:
- * 1. Open Instagram in Chrome
- * 2. Scroll down manually to load posts (e.g., to May 2025)
- * 3. Press F12 → Go to Console tab
- * 4. Paste this entire script
- * 5. Press Enter
- * 6. Two JSON files will be downloaded automatically
+ * 1. Open Instagram profile in Chrome (e.g. instagram.com/username)
+ * 2. Press F12 → Go to Console tab
+ * 3. Paste this entire script
+ * 4. Press Enter
+ * 5. Enter number of batches when prompted
+ * 6. Multiple JSON files will be downloaded automatically
  */
 
-(function() {
+(function () {
   'use strict';
 
   // Configuration
   const BATCH_SIZE = 47;
-  const SCROLL_UP_COUNT = 48;
-  const SCROLL_WAIT_MS = 3000;
+  const SCROLL_STEP_PX = 3000;       // How many pixels to scroll down each step
+  const SCROLL_STEP_WAIT_MS = 2500;  // Wait per scroll step (ms)
+  const MAX_SCROLL_ATTEMPTS = 30;    // Max scroll attempts before giving up on a batch
+
+  // Global state
+  const globalSeen = new Set();      // Tracks ALL collected postIds across every batch
+  let numberOfBatches = 10;
+
+  // ─── Utilities ────────────────────────────────────────────────────────────
 
   function log(message) {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
     console.log(`[${timestamp}] ${message}`);
   }
 
-  function processTitle(text) {
+  function setTitle(text) {
     document.title = text;
   }
 
-  async function sleep(ms) {
+  function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // Get all post links from page
-  function getPostLinks() {
+  // ─── DOM Scraping ─────────────────────────────────────────────────────────
+
+  /**
+   * Returns ALL valid post links currently in the DOM.
+   * Does NOT filter by globalSeen — caller decides what to do with them.
+   */
+  function getAllPostLinks() {
     const links = document.querySelectorAll('a[href*="/p/"]');
     const seen = new Set();
-    const uniqueLinks = [];
+    const result = [];
 
     links.forEach(a => {
       const href = a.href;
       if (!href || !href.includes('/p/')) return;
 
-      const match = href.match(/\/p\/([^\/?]+)(?:\/)?$/);
-      const postId = match ? match[1] : '';
+      const match = href.match(/\/p\/([^\/?#]+)/);
+      if (!match) return;
 
-      // Skip story links (they end with / and are usually shorter)
-      if (postId && postId.length < 8) return;
-
-      // Check for duplicates
-      if (seen.has(postId)) return;
+      const postId = match[1];
+      if (postId.length < 8) return;       // Skip short/story IDs
+      if (seen.has(postId)) return;         // Skip DOM duplicates
 
       seen.add(postId);
-      uniqueLinks.push({
-        index: uniqueLinks.length,
-        url: href,
-        postId: postId
-      });
+      result.push({ url: href, postId });
     });
 
-    return uniqueLinks;
+    return result;
   }
 
-  // Save to JSON with batch suffix
-  function saveToJson(urls, batchNumber, totalBatches) {
-    const data = {
-      metadata: {
-        targetUsername: window.location.href.match(/instagram\.com\/([^\/]+)/)[1] || 'unknown',
-        batchNumber: batchNumber,
-        totalBatches: totalBatches,
-        totalPostsLoaded: urls.length,
-        collectedCount: urls.length,
-        collectedAt: new Date().toISOString()
-      },
-      posts: urls
-    };
-
-    const dataStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `post-urls-${data.metadata.targetUsername}-batch${batchNumber}-of${totalBatches}-${Date.now()}.json`;
-    link.click();
-
-    log(`✓ Saved: ${link.download}`);
-    return true;
+  /**
+   * Returns only posts NOT yet in globalSeen.
+   */
+  function getNewPostLinks() {
+    return getAllPostLinks().filter(p => !globalSeen.has(p.postId));
   }
 
-  // Scroll up to load more posts
-  async function scrollUpAndLoad() {
-    log('');
-    log('🔄 Scroll Up: Loading more posts...');
-    log('');
+  // ─── Scrolling ────────────────────────────────────────────────────────────
 
-    const scrollSteps = 10;
-    const scrollAmount = SCROLL_UP_COUNT / scrollSteps;
+  /**
+   * Scrolls DOWN until we have at least `targetNewCount` unseen posts,
+   * or until we hit the scroll attempt limit.
+   */
+  async function scrollUntilEnoughNewPosts(targetNewCount, batchNum) {
+    let attempts = 0;
 
-    for (let i = 0; i < scrollSteps; i++) {
-      // Scroll up by calculated amount
-      window.scrollBy(0, -scrollAmount * 100);
+    while (attempts < MAX_SCROLL_ATTEMPTS) {
+      const newLinks = getNewPostLinks();
 
-      processTitle(`[Scroll Up] ${i + 1}/${scrollSteps}`);
+      log(`  ⬇️  Scroll attempt ${attempts + 1}/${MAX_SCROLL_ATTEMPTS} — New posts found: ${newLinks.length}/${targetNewCount}`);
+      setTitle(`[Batch ${batchNum}/${numberOfBatches}] Scrolling... ${newLinks.length}/${targetNewCount} new`);
 
-      // Wait for Instagram to load more posts
-      await sleep(SCROLL_WAIT_MS);
+      if (newLinks.length >= targetNewCount) {
+        log(`  ✓ Enough new posts found (${newLinks.length})`);
+        return newLinks;
+      }
 
-      log(`  ⬆️ Scroll ${i + 1}/${scrollSteps} - Posts loaded: ${getPostLinks().length}`);
+      window.scrollBy(0, SCROLL_STEP_PX);
+      await sleep(SCROLL_STEP_WAIT_MS);
+      attempts++;
     }
 
-    // Additional wait to ensure posts are loaded
-    await sleep(SCROLL_WAIT_MS);
-
-    const newLinks = getPostLinks();
-    log('');
-    log(`✓ Scroll up complete! Posts on page: ${newLinks.length}`);
+    // Return whatever we have even if not enough
+    const newLinks = getNewPostLinks();
+    log(`  ⚠ Scroll limit reached. Found ${newLinks.length} new posts.`);
     return newLinks;
   }
 
-  // Collect a batch of URLs
-  function collectBatch(links, batchNumber, startIndex) {
-    const endIndex = Math.min(startIndex + BATCH_SIZE, links.length);
-    const urlsToCollect = links.slice(startIndex, endIndex);
+  // ─── Saving ───────────────────────────────────────────────────────────────
 
+  function saveToJson(posts, batchNumber, totalBatches, username) {
+    const data = {
+      metadata: {
+        targetUsername: username,
+        batchNumber,
+        totalBatches,
+        collectedCount: posts.length,
+        collectedAt: new Date().toISOString()
+      },
+      posts
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `post-urls-${username}-batch${batchNumber}-of${totalBatches}-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    log(`  💾 Saved: ${link.download}`);
+  }
+
+  // ─── Main ─────────────────────────────────────────────────────────────────
+
+  async function main() {
+    log('=== Instagram URL Collector (Fixed Version) ===');
     log('');
-    log(`📊 Batch ${batchNumber}: Collecting ${urlsToCollect.length} posts...`);
-    log(`   • From index: ${startIndex} to ${endIndex - 1}`);
 
-    const collected = [];
-    urlsToCollect.reverse(); // Reverse to get oldest first in batch
+    // Guard: must be on Instagram
+    if (!window.location.href.includes('instagram.com')) {
+      log('❌ ERROR: Please navigate to an Instagram profile first!');
+      log('   Example: https://instagram.com/someusername');
+      return;
+    }
 
-    for (let i = 0; i < urlsToCollect.length; i++) {
-      const post = urlsToCollect[i];
-      const percent = Math.round(((i + 1) / urlsToCollect.length) * 100);
-      processTitle(`[Batch ${batchNumber}] ${i + 1}/${urlsToCollect.length} ${percent}%`);
+    const usernameMatch = window.location.href.match(/instagram\.com\/([^/?#]+)/);
+    const username = usernameMatch ? usernameMatch[1] : 'unknown';
+    log(`📍 Target profile: @${username}`);
+    log(`📦 Batch size: ${BATCH_SIZE} posts per file`);
+    log('');
 
-      collected.push({
-        index: startIndex + (urlsToCollect.length - 1 - i),
-        url: post.url,
-        postId: post.postId
-      });
+    // ── Ask user for batch count ──
+    const batchInput = prompt(
+      `📊 How many batches do you want to collect?\n\n` +
+      `Each batch = ${BATCH_SIZE} posts → 1 JSON file downloaded\n\n` +
+      `Examples:\n` +
+      `  2  →  ${2 * BATCH_SIZE} posts  (2 files)\n` +
+      `  5  →  ${5 * BATCH_SIZE} posts  (5 files)\n` +
+      `  10 →  ${10 * BATCH_SIZE} posts (10 files)\n\n` +
+      `Enter number of batches:`,
+      '5'
+    );
 
-      if (i % 10 === 0) {
-        log(`  [${i + 1}/${urlsToCollect.length}] Collected...`);
+    if (!batchInput) {
+      log('❌ Cancelled by user.');
+      return;
+    }
+
+    numberOfBatches = parseInt(batchInput, 10);
+
+    if (isNaN(numberOfBatches) || numberOfBatches <= 0) {
+      log('❌ ERROR: Invalid number. Please enter a positive integer.');
+      return;
+    }
+
+    if (numberOfBatches > 20) {
+      const ok = confirm(
+        `⚠ ${numberOfBatches} batches is a lot!\n` +
+        `Estimated time: ~${Math.ceil(numberOfBatches * MAX_SCROLL_ATTEMPTS * SCROLL_STEP_WAIT_MS / 60000)} minutes.\n\n` +
+        `Continue?`
+      );
+      if (!ok) {
+        log('❌ Cancelled by user.');
+        return;
       }
     }
 
-    return collected;
-  }
-
-  // Main function
-  async function main() {
-    log('=== Console URL Collector - Scroll Up Version ===');
-    log('📝 Collects 2 batches of 47 URLs each (94 total)');
+    log(`🎯 Target: ${numberOfBatches} batches (up to ${numberOfBatches * BATCH_SIZE} posts)`);
     log('');
 
-    log('📋 Instructions:');
-    log('   1. Open Instagram profile in Chrome');
-    log('   2. Scroll down to load posts (e.g., to May 2025)');
-    log('   3. Press F12 to open DevTools');
-    log('   4. Go to Console tab');
-    log('   5. Copy this ENTIRE script');
-    log('   6. Paste into Console and press Enter');
-    log('   7. Two JSON files will be downloaded');
-    log('');
+    // ── Batch loop ──
+    const summary = [];
 
-    // Check we're on Instagram
-    if (!window.location.href.includes('instagram.com')) {
-      log('❌ ERROR: Please navigate to an Instagram profile first!');
-      log('   Example: instagram.com/infolomba');
+    for (let batchNum = 1; batchNum <= numberOfBatches; batchNum++) {
       log('');
-      log('💡 Tip: Make sure you can see the Instagram page before running this script.');
-      return;
+      log(`════════════════════════════════════════`);
+      log(`📦 BATCH ${batchNum} / ${numberOfBatches}`);
+      log(`════════════════════════════════════════`);
+
+      // Scroll until we have BATCH_SIZE new posts (or give up)
+      log(`🔍 Looking for ${BATCH_SIZE} new posts...`);
+      const newLinks = await scrollUntilEnoughNewPosts(BATCH_SIZE, batchNum);
+
+      if (newLinks.length === 0) {
+        log('⚠ No new posts found at all. Stopping early.');
+        break;
+      }
+
+      // Take up to BATCH_SIZE from the new links
+      const toCollect = newLinks.slice(0, BATCH_SIZE);
+
+      // Mark them as seen BEFORE saving so next batch won't re-collect them
+      toCollect.forEach(p => globalSeen.add(p.postId));
+
+      // Build the posts array with sequential index
+      const posts = toCollect.map((p, i) => ({
+        index: (batchNum - 1) * BATCH_SIZE + i,
+        url: p.url,
+        postId: p.postId
+      }));
+
+      log(`✅ Collected ${posts.length} new posts for batch ${batchNum}`);
+      saveToJson(posts, batchNum, numberOfBatches, username);
+
+      summary.push({ batchNumber: batchNum, count: posts.length });
+
+      if (toCollect.length < BATCH_SIZE) {
+        log('⚠ Fewer posts than expected — Instagram may have no more posts to load.');
+        log('   Stopping early.');
+        break;
+      }
+
+      // Small pause between batches
+      await sleep(1000);
     }
 
-    // Get username from URL
-    const username = window.location.href.match(/instagram\.com\/([^\/]+)/) ? window.location.href.match(/instagram\.com\/([^\/]+)/)[1] : 'unknown';
-
-    log('📍 Target profile: @' + username);
-    log(`📦 Batch size: ${BATCH_SIZE} posts`);
-    log(`🔄 Scroll up amount: ${SCROLL_UP_COUNT} steps`);
-    log('');
-
-    // Collect links from current page
-    log('🔍 Step 1: Scanning page for post links...');
-    const initialLinks = getPostLinks();
-    log(`✓ Found ${initialLinks.length} post links`);
-
-    if (initialLinks.length === 0) {
-      log('❌ ERROR: No post links found on this page!');
-      log('   • Make sure you scrolled down first');
-      log('   • The script will scroll up to load older posts');
-      return;
-    }
-
-    // ========== BATCH 1 ==========
-    log('');
-    log('========================================');
-    log('📦 BATCH 1: Collecting first posts');
-    log('========================================');
-
-    const batch1 = collectBatch(initialLinks, 1, 0);
+    // ── Final summary ──
+    const totalPosts = summary.reduce((s, b) => s + b.count, 0);
 
     log('');
-    log('✓ Batch 1 complete!');
-    log(`📊 Summary:`);
-    log(`   • Collected: ${batch1.length} URLs`);
-    log(`   • From index: 0 to ${batch1.length - 1}`);
-
-    // Save Batch 1
-    saveToJson(batch1, 1, 2);
-
-    log('');
-    log('✅ Batch 1 saved!');
-
-    // ========== SCROLL UP ==========
-    const scrolledLinks = await scrollUpAndLoad();
-
-    if (scrolledLinks.length === 0) {
-      log('❌ ERROR: No posts found after scroll up!');
-      log('   • Try scrolling down more before running the script');
-      return;
-    }
-
-    // ========== BATCH 2 ==========
-    log('');
-    log('========================================');
-    log('📦 BATCH 2: Collecting next posts');
-    log('========================================');
-
-    // Calculate starting index for batch 2 (after batch 1)
-    const batch2StartIndex = BATCH_SIZE;
-
-    if (scrolledLinks.length <= batch2StartIndex) {
-      log(`⚠ WARNING: Not enough posts loaded for batch 2`);
-      log(`   Need at least ${batch2StartIndex + BATCH_SIZE} posts, only have ${scrolledLinks.length}`);
-      log(`   Will collect remaining ${Math.max(0, scrolledLinks.length - batch2StartIndex)} posts`);
-    }
-
-    const batch2 = collectBatch(scrolledLinks, 2, batch2StartIndex);
-
-    log('');
-    log('✓ Batch 2 complete!');
-    log(`📊 Summary:`);
-    log(`   • Collected: ${batch2.length} URLs`);
-    log(`   • From index: ${batch2StartIndex} to ${batch2StartIndex + batch2.length - 1}`);
-
-    // Save Batch 2
-    saveToJson(batch2, 2, 2);
-
-    log('');
-    log('✅ Batch 2 saved!');
-
-    // ========== FINAL SUMMARY ==========
-    log('');
-    log('========================================');
-    log('✅ ALL BATCHES COMPLETE!');
-    log('========================================');
-    log('');
-    log('📊 Final Summary:');
-    log(`   • Batch 1: ${batch1.length} posts`);
-    log(`   • Batch 2: ${batch2.length} posts`);
-    log(`   • Total: ${batch1.length + batch2.length} posts`);
+    log('════════════════════════════════════════');
+    log('✅ ALL DONE!');
+    log('════════════════════════════════════════');
+    log(`   Batches completed : ${summary.length} / ${numberOfBatches}`);
+    log(`   Total posts saved : ${totalPosts}`);
     log('');
     log('📂 Files downloaded:');
-    log('   • post-urls-XXX-batch1-of-2-XXX.json');
-    log('   • post-urls-XXX-batch2-of-2-XXX.json');
+    summary.forEach(b => {
+      log(`   • batch ${b.batchNumber}: ${b.count} posts`);
+    });
     log('');
-    log('🎯 Next Steps:');
-    log('   1. Move both JSON files to collected_link/ folder');
+    log('🎯 Next steps:');
+    log('   1. Move all JSON files to collected_link/ folder');
     log('   2. Run scrape-multiple-posts.js for each file');
-    log('   3. Or combine files and run once');
-    log('');
 
-    // Restore title
-    processTitle('Done - 2 batches collected');
-    setTimeout(() => {
-      document.title = 'Instagram';
-    }, 5000);
+    setTitle(`Done — ${summary.length} batches, ${totalPosts} posts`);
+    setTimeout(() => { document.title = 'Instagram'; }, 6000);
   }
 
-  // Run
-  main().catch(error => {
-    log('❌ ERROR:', error.message);
+  main().catch(err => {
+    console.error('❌ Fatal error:', err);
   });
 
 })();
