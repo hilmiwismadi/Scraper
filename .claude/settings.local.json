@@ -28,7 +28,8 @@
       "Bash(INSTAGRAM_USERNAME=\"hilmekkkk\" INSTAGRAM_PASSWORD=\"wismadi4z11\" node:*)",
       "Bash(start chrome:*)",
       "Bash(dir D:\\\\Hilmi\\\\Coding\\\\WebScraper:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

@@ -1431,6 +1431,61 @@ app.get('/api/browser-scraper/increment', (req, res) => {
   }
 });
 
+// Browser Scraper API - Save raw CSV content directly
+// This endpoint accepts raw CSV content and filename, saves to /parsed
+app.post('/api/browser-scraper/save-csv', (req, res) => {
+  try {
+    const { csvContent, filename, sessionId } = req.body;
+
+    if (!csvContent) {
+      return res.status(400).json({ error: 'CSV content is required' });
+    }
+
+    // Get next increment number
+    const parsedDir = path.join(__dirname, 'parsed');
+    if (!fs.existsSync(parsedDir)) {
+      fs.mkdirSync(parsedDir, { recursive: true });
+    }
+
+    const files = fs.readdirSync(parsedDir);
+    const increments = files
+      .filter(f => f.match(/^(example_)?parsed#(\d+)-.*\.csv$/))
+      .map(f => {
+        const match = f.match(/parsed#(\d+)-/);
+        return match ? parseInt(match[1]) : 0;
+      });
+    const increment = increments.length > 0 ? Math.max(...increments) + 1 : 1;
+
+    // Use provided filename or generate one
+    const csvFilename = filename || `example_parsed#${increment}-${sessionId}-${Date.now()}.csv`;
+    const csvPath = path.join(parsedDir, csvFilename);
+
+    // Write CSV file
+    fs.writeFileSync(csvPath, csvContent, 'utf8');
+
+    // Count rows (excluding header)
+    const lines = csvContent.split('\n');
+    const postsSaved = lines.length > 1 ? lines.length - 1 : 0;
+
+    console.log(`\n✓ Browser scraper CSV saved to /parsed/${csvFilename}`);
+    console.log(`  Posts: ${postsSaved}`);
+
+    res.json({
+      success: true,
+      message: 'CSV saved to /parsed folder',
+      filename: csvFilename,
+      path: csvPath,
+      sessionId: sessionId,
+      increment: increment,
+      postsSaved: postsSaved
+    });
+
+  } catch (error) {
+    console.error('Error saving browser scraper CSV:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`\n🕷️  Instagram Scraper UI running at: http://localhost:${PORT}`);
   console.log(`Press Ctrl+C to stop\n`);

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Instagram URLs to CSV - Drag & Drop Tool</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      color: #333;
+      margin: 0 0 30px 0;
+      font-size: 28px;
+      text-align: center;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .drop-zone {
+      border: 3px dashed #ccc;
+      border-radius: 15px;
+      padding: 60px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: #f8f9fa;
+    }
+
+    .drop-zone.dragover {
+      border-color: #667eea;
+      background: #e8eaf6;
+      transform: scale(1.02);
+    }
+
+    .drop-zone.dragover .drop-icon {
+      color: #667eea;
+      transform: scale(1.2);
+    }
+
+    .drop-icon {
+      font-size: 64px;
+      color: #ccc;
+      transition: all 0.3s ease;
+    }
+
+    .drop-text {
+      font-size: 18px;
+      color: #666;
+      margin-top: 15px;
+    }
+
+    .drop-hint {
+      font-size: 14px;
+      color: #999;
+      margin-top: 8px;
+    }
+
+    .section {
+      margin-top: 30px;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .status {
+      display: none;
+      padding: 15px;
+      background: #e8eaf6;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: #721c24;
+    }
+
+    .status.info {
+      background: #e3f2fd;
+      color: #0d47a1;
+    }
+
+    .status-text {
+      font-size: 14px;
+      margin-bottom: 5px;
+    }
+
+    .status-detail {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .progress-bar.show {
+      display: block;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .log {
+      background: #1a1a2e;
+      color: #00ff88;
+      padding: 15px;
+      border-radius: 10px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .log.show {
+      display: block;
+    }
+
+    .hidden-input {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .info-box {
+      background: #fff3e0;
+      padding: 15px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .info-box strong {
+      color: #667eea;
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .checkbox-wrapper label {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    button {
+      padding: 15px 30px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      width: 100%;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+      margin-top: 10px;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .result-section {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e0e0e0;
+      display: none;
+    }
+
+    .result-section.show {
+      display: block;
+    }
+
+    .result-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 15px;
+    }
+
+    .result-link {
+      padding: 10px 20px;
+      background: #f0f0f0;
+      border-radius: 8px;
+      color: #667eea;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .result-link:hover {
+      background: #e8eaf6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📥 <span>URLs to CSV</span></h1>
+    <p class="subtitle">Drag & drop your JSON file, then open Instagram links</p>
+
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">📂</div>
+      <div class="drop-text">Drop your JSON file here</div>
+      <div class="drop-hint">or click to browse</div>
+      <input type="file" id="fileInput" accept=".json" class="hidden-input">
+    </div>
+
+    <div id="fileInfo" class="info-box" style="display:none;">
+      <strong>📋 File Loaded:</strong> <span id="filename"></span><br>
+      Posts: <span id="postCount"></span> | Username: <span id="username"></span>
+    </div>
+
+    <div class="checkbox-wrapper">
+      <input type="checkbox" id="autoScroll" checked>
+      <label for="autoScroll">Auto-scroll to Instagram links (recommended)</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">⚙️ Scraping Options</div>
+      <div class="status" id="scrapeStatus">
+        <div class="status-text">Ready to start</div>
+        <div class="status-detail" id="statusDetail"></div>
+      </div>
+      <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <button id="startBtn" class="btn-primary">🚀 Start Scraping</button>
+      <button id="downloadCsvBtn" class="btn-secondary" style="display:none;">📥 Download CSV</button>
+    </div>
+
+    <div id="log" class="log"></div>
+
+    <div class="result-section" id="resultSection">
+      <div class="section-title">✅ Scraping Complete!</div>
+      <div class="info-box">
+        <strong>Results:</strong><br>
+        Successfully scraped: <span id="successCount"></span><br>
+        Failed: <span id="errorCount"></span><br>
+        CSV filename: <span id="csvFilename"></span>
+      </div>
+      <div class="result-links">
+        <a href="#" id="downloadLink" class="result-link">📥 Download CSV</a>
+        <a href="#" id="openFolderLink" class="result-link">📂 Open parsed folder</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const POST_WAIT_MS = 3000;
+    const SERVER_URL = 'http://localhost:3003';
+    const sessionId = generateSessionId();
+
+    let jsonData = null;
+    let scrapedPosts = [];
+    let isScraping = false;
+
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const startBtn = document.getElementById('startBtn');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    const scrapeStatus = document.getElementById('scrapeStatus');
+    const statusDetail = document.getElementById('statusDetail');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const logDiv = document.getElementById('log');
+    const fileInfo = document.getElementById('fileInfo');
+    const resultSection = document.getElementById('resultSection');
+
+    function generateSessionId() {
+      return Date.now().toString(36).substring(0, 8) + Math.random().toString(36).substring(2, 6);
+    }
+
+    function escapeCSV(value) {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    }
+
+    function addLog(message) {
+      const time = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${time}] ${message}<br>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function setStatus(type, text, detail = '') {
+      scrapeStatus.className = 'status show ' + type;
+      scrapeStatus.querySelector('.status-text').textContent = text;
+      statusDetail.textContent = detail;
+    }
+
+    function setProgress(percent) {
+      progressBar.classList.add('show');
+      progressFill.style.width = percent + '%';
+    }
+
+    function hideProgress() {
+      progressBar.classList.remove('show');
+    }
+
+    // Drag and drop handlers
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.name.endsWith('.json')) {
+        loadJsonFile(file);
+      } else {
+        alert('Please drop a valid JSON file');
+      }
+    });
+
+    dropZone.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        loadJsonFile(file);
+      }
+    });
+
+    async function loadJsonFile(file) {
+      try {
+        const text = await file.text();
+        jsonData = JSON.parse(text);
+
+        const meta = jsonData.metadata || {};
+        const posts = jsonData.posts || [];
+
+        document.getElementById('filename').textContent = file.name;
+        document.getElementById('postCount').textContent = meta.collectedCount || meta.totalPostsLoaded || posts.length;
+        document.getElementById('username').textContent = meta.targetUsername || 'unknown';
+
+        fileInfo.style.display = 'block';
+        setStatus('info', 'File loaded', `${posts.length} posts ready to scrape`);
+        addLog(`✓ JSON file loaded: ${file.name}`);
+        addLog(`  Posts: ${posts.length}`);
+        addLog(`  Username: ${meta.targetUsername || 'unknown'}`);
+
+      } catch (error) {
+        setStatus('error', 'Failed to load JSON', error.message);
+        addLog(`✗ Error reading file: ${error.message}`);
+      }
+    }
+
+    async function openInstagramUrl(url) {
+      const autoScroll = document.getElementById('autoScroll').checked;
+
+      if (autoScroll) {
+        // Open in new tab and let user control
+        window.open(url, '_blank');
+        return new Promise(resolve => setTimeout(resolve, 2000));
+      } else {
+        // Try to use existing tab
+        window.open(url, '_blank');
+        return new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+
+    async function scrapePostUrl(postUrl, index) {
+      addLog(`📖 Opening post ${index + 1}: ${postUrl.substring(postUrl.length - 30)}...`);
+
+      try {
+        // Open Instagram URL in new tab
+        await openInstagramUrl(postUrl);
+
+        // Give user time to see page loaded
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // Ask user to return to this tool page
+        const confirmed = confirm(`Post ${index + 1} opened.\n\nClick OK once you've reviewed the page\nand want to proceed to next post.\n\nOr click Cancel to stop scraping.`);
+
+        if (!confirmed) {
+          throw new Error('Cancelled by user');
+        }
+
+        // Extract caption from user input
+        const caption = prompt(`Post ${index + 1}: ${postUrl.substring(postUrl.length - 25)}...\n\nPlease copy and paste the caption here:`, '');
+
+        if (!caption) {
+          throw new Error('No caption provided');
+        }
+
+        const postData = {
+          session_id: sessionId,
+          json_file: '',
+          post_index: index,
+          post_url: postUrl,
+          original_caption: caption,
+          extracted_title: '',
+          extracted_organizer: '',
+          extracted_date: '',
+          extracted_location: '',
+          registration_fee: '',
+          phone_numbers: '',
+          contact_persons: '',
+          parse_status: 'pending',
+          parse_timestamp: new Date().toISOString(),
+          last_edited: ''
+        };
+
+        addLog(`  ✓ Caption extracted (${caption.substring(0, 50)}...)`);
+        return postData;
+
+      } catch (error) {
+        addLog(`  ✗ Error: ${error.message}`);
+        return {
+          session_id: sessionId,
+          json_file: '',
+          post_index: index,
+          post_url: postUrl,
+          original_caption: '',
+          extracted_title: '',
+          extracted_organizer: '',
+          extracted_date: '',
+          extracted_location: '',
+          registration_fee: '',
+          phone_numbers: '',
+          contact_persons: '',
+          parse_status: 'error',
+          parse_timestamp: new Date().toISOString(),
+          last_edited: '',
+          error: error.message
+        };
+      }
+    }
+
+    function generateCSV(posts) {
+      const headers = [
+        'session_id',
+        'json_file',
+        'post_index',
+        'post_url',
+        'original_caption',
+        'extracted_title',
+        'extracted_organizer',
+        'extracted_date',
+        'extracted_location',
+        'registration_fee',
+        'phone_numbers',
+        'contact_persons',
+        'parse_status',
+        'parse_timestamp',
+        'last_edited'
+      ];
+
+      let csv = headers.join(',') + '\n';
+
+      posts.forEach(post => {
+        csv += [
+          escapeCSV(post.session_id),
+          escapeCSV(post.json_file),
+          escapeCSV(post.post_index),
+          escapeCSV(post.post_url),
+          escapeCSV(post.original_caption),
+          escapeCSV(post.extracted_title),
+          escapeCSV(post.extracted_organizer),
+          escapeCSV(post.extracted_date),
+          escapeCSV(post.extracted_location),
+          escapeCSV(post.registration_fee),
+          escapeCSV(post.phone_numbers),
+          escapeCSV(post.contact_persons),
+          escapeCSV(post.parse_status),
+          escapeCSV(post.parse_timestamp),
+          escapeCSV(post.last_edited)
+        ].join(',') + '\n';
+      });
+
+      return csv;
+    }
+
+    function downloadCSV(csvContent, filename) {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function saveToServer(csvContent, filename) {
+      try {
+        const response = await fetch(`${SERVER_URL}/api/browser-scraper/save-csv`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            csvContent: csvContent,
+            filename: filename,
+            sessionId: sessionId
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          addLog(`✓ Saved to /parsed/${data.filename}`);
+          addLog(`  Session ID: ${data.sessionId}`);
+          addLog(`  Increment: ${data.increment}`);
+          addLog(`  Posts saved: ${data.postsSaved}`);
+          return true;
+        } else {
+          const errorText = await response.text();
+          addLog(`✗ Server error: ${errorText}`);
+          return false;
+        }
+      } catch (error) {
+        addLog(`✗ Connection error: ${error.message}`);
+        addLog(`  Make sure server is running (npm start)`);
+        return false;
+      }
+    }
+
+    startBtn.addEventListener('click', async () => {
+      if (!jsonData || !jsonData.posts || jsonData.posts.length === 0) {
+        alert('Please load a JSON file first!');
+        return;
+      }
+
+      if (isScraping) {
+        alert('Scraping is already in progress...');
+        return;
+      }
+
+      isScraping = true;
+      startBtn.disabled = true;
+      startBtn.textContent = '⏳ Scraping...';
+
+      const posts = jsonData.posts || [];
+      addLog(`🚀 Starting to scrape ${posts.length} posts...`);
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      try {
+        for (let i = 0; i < posts.length; i++) {
+          const post = posts[i];
+          const percent = Math.round(((i + 1) / posts.length) * 100);
+          setProgress(percent);
+          setStatus('info', `Scraping ${i + 1}/${posts.length}`, `${percent}% complete`);
+
+          const postData = await scrapePostUrl(post.url, post.index);
+          scrapedPosts.push(postData);
+
+          if (postData.parse_status === 'error') {
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        }
+
+        hideProgress();
+        setStatus('success', 'Scraping complete!', `${successCount} success, ${errorCount} errors`);
+
+        // Generate CSV
+        const csvContent = generateCSV(scrapedPosts);
+        const timestamp = Date.now();
+        const filename = `example_parsed#${sessionId}-${timestamp}.csv`;
+
+        addLog('');
+        addLog('💾 Saving CSV file...');
+
+        // Try to save to server
+        const serverSaved = await saveToServer(csvContent, filename);
+
+        if (!serverSaved) {
+          addLog('  ⚠ Server save failed, downloading locally only');
+        }
+
+        // Always download locally as backup
+        downloadCSV(csvContent, filename);
+        addLog(`✓ CSV downloaded: ${filename}`);
+
+        // Show results
+        document.getElementById('successCount').textContent = successCount;
+        document.getElementById('errorCount').textContent = errorCount;
+        document.getElementById('csvFilename').textContent = filename;
+        document.getElementById('downloadLink').href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv' }));
+        document.getElementById('downloadLink').download = filename;
+        document.getElementById('openFolderLink').href = `file:///D:/Hilmi/Coding/WebScraper/parsed/`;
+
+        startBtn.textContent = '🔄 Start Again';
+        resultSection.classList.add('show');
+        downloadCsvBtn.style.display = 'none';
+
+        addLog('');
+        addLog('✅ Done!');
+        addLog('📂 CSV saved to:');
+        addLog(`   - Downloaded to browser`);
+        addLog(`   - /parsed/${filename} (if server is running)`);
+        addLog('');
+        addLog('🎯 Next step: Ask Claude to parse per MASTER_RULE.md');
+
+      } catch (error) {
+        setStatus('error', 'Scraping failed', error.message);
+        addLog(`✗ Fatal error: ${error.message}`);
+      } finally {
+        isScraping = false;
+        startBtn.disabled = false;
+      }
+    });
+
+    downloadCsvBtn.addEventListener('click', async () => {
+      if (scrapedPosts.length === 0) {
+        alert('No data to download. Please start scraping first.');
+        return;
+      }
+
+      const csvContent = generateCSV(scrapedPosts);
+      const timestamp = Date.now();
+      const filename = `example_parsed#${sessionId}-${timestamp}.csv`;
+      downloadCSV(csvContent, filename);
+    });
+  </script>
+</body>
+</html>
